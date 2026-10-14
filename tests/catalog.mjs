@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import { seed, removeCategory, removeItem, calculate, path, orderedCategories } from '../lib/model.ts';
+const w = structuredClone(seed);
+w.sales = [{ id: 'sale', eventId: 'demo-event', date: '2026-10-06', reference: '', lines: [{ itemId: 'design-0-mini', name: 'The Proclamation', category: 'Prints / Mini prints', price: 1500, discount: 0, deal: '' }] }];
+let next = removeCategory(w, 'prints');
+assert.equal(next.items.length, w.items.length);
+assert(next.items.filter(i => i.id.startsWith('design-')).every(i => i.categoryId === null));
+assert(!next.categories.some(c => ['prints', 'mini', 'standard', 'foil'].includes(c.id)));
+assert(next.deals.every(d => !d.categoryIds.includes('prints')));
+assert.deepEqual(next.sales, w.sales);
+assert.throws(() => calculate(next, [{ id: 'u', itemId: 'design-0-mini', poolId: '' }], []), /category/);
+next.items[0].categoryId = 'charms';
+assert.equal(calculate(next, [{ id: 'u', itemId: next.items[0].id, poolId: '' }], []).total, 1000);
+next = removeCategory(w, 'mini');
+assert(next.categories.some(c => c.id === 'prints'));
+assert(next.items.filter(i => i.categoryId === 'foil').length > 0);
+next = removeItem(w, 'design-0-mini');
+assert(!next.items.some(i => i.id === 'design-0-mini'));
+assert.deepEqual(next.sales, w.sales);
+const added = { ...w, categories: [...w.categories, { id: 'single', name: 'Single-Layer', parentId: 'standees', price: 2500 }] };
+assert.deepEqual(path(added, 'single').map(c => c.name), ['Standees', 'Single-Layer']);
+console.log('Catalog checks passed: nested deletion, N/A, reassignment, preserved sales, and Standees parent.');
+const ordered = orderedCategories(added.categories);
+assert.equal(ordered.findIndex(c => c.id === 'single'), ordered.findIndex(c => c.id === 'multi') + 1);
+assert.deepEqual(ordered.filter(c => !c.parentId).map(c => c.name), ['Charms', 'Prints', 'Standees']);
+const nested = [...added.categories, { id: 'nested', name: 'Nested', parentId: 'single', price: 100 }];
+assert.deepEqual(orderedCategories(nested).filter(c => ['standees', 'multi', 'single', 'nested'].includes(c.id)).map(c => c.id), ['standees', 'multi', 'single', 'nested']);
+assert.equal(orderedCategories(nested).length, nested.length);
+console.log('Category ordering passed: appended Single-Layer stays under Standees; parent names are alphabetical; nested children stay with parents.');
+const { validCategoryDepth, sortedItems } = await import('../lib/model.ts');
+assert(validCategoryDepth(added.categories));
+assert(!validCategoryDepth(nested));
+assert.equal(sortedItems(seed, seed.items, 'price', 1)[0].categoryId, 'charms');
+assert.equal(sortedItems(seed, seed.items, 'price', -1)[0].categoryId, 'foil');
+for (const column of ['name', 'category']) {
+  const asc = sortedItems(seed, seed.items, column, 1), desc = sortedItems(seed, seed.items, column, -1);
+  const value = i => column === 'name' ? i.name : path(seed, i.categoryId).map(c => c.name).join(' / ');
+  assert(value(asc[0]).localeCompare(value(asc.at(-1))) <= 0);
+  assert(value(desc[0]).localeCompare(value(desc.at(-1))) >= 0);
+}
+console.log('One subcategory level and column sorting checks passed.');
+const { removeDeal } = await import('../lib/model.ts');
+const tied = { ...seed, items: [{ id: 'z', name: 'Alpha', categoryId: 'foil' }, { id: 'a', name: 'Zulu', categoryId: 'foil' }] };
+for (const direction of [1, -1])
+  for (const column of ['category', 'price'])
+    assert.deepEqual(sortedItems(tied, tied.items, column, direction).map(i => i.name), ['Alpha', 'Zulu']);
+const removed = removeDeal(seed, [{ id: 'p', dealId: 'b2g1' }, { id: 'q', dealId: 'b3g2' }], [{ id: 'u', itemId: 'design-0-foil', poolId: 'p' }, { id: 'v', itemId: 'design-1-foil', poolId: 'q' }], 'b2g1');
+assert(!removed.workspace.deals.some(d => d.id === 'b2g1'));
+assert.deepEqual(removed.workspace.sales, seed.sales);
+assert.equal(removed.units[0].poolId, '');
+assert.equal(removed.units[1].poolId, 'q');
+assert.equal(removed.pools.length, 1);
+console.log('Ascending name tie-breakers in both primary directions; deal deletion returns only affected pool items and preserves sales.');

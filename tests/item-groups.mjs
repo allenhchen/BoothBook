@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { fandomGroups } from '../lib/item-groups.ts';
+const items = [{ id: 'z', name: 'Zelda', categoryId: 'prints', fandom: '  Legend   of Zelda ' }, { id: 'c', name: 'Character 10', categoryId: 'prints', fandom: 'Arknights' }, { id: 'a', name: 'Character 2', categoryId: 'prints', fandom: ' arknights ' }, { id: 'u', name: 'Original design', categoryId: 'prints' }, { id: 'blank', name: 'Another design', categoryId: 'prints', fandom: '  ' }, { id: 'na', name: 'Untitled design', categoryId: 'prints', fandom: 'N/A' }, { id: 'l', name: 'Link', categoryId: 'prints', fandom: 'legend of zelda' }];
+const before = structuredClone(items), groups = fandomGroups(items);
+assert.deepEqual(groups.map(g => g.id), ['arknights', 'legend of zelda', 'n/a']);
+assert.deepEqual(groups[0].items.map(i => i.name), ['Character 2', 'Character 10']);
+assert.deepEqual(groups[1].items.map(i => i.name), ['Link', 'Zelda']);
+assert.equal(groups[2].items.length, 3);
+assert.deepEqual(groups.flatMap(g => g.items.map(i => i.id)).sort(), items.map(i => i.id).sort());
+assert.deepEqual(items, before);
+assert.deepEqual(fandomGroups([]), []);
+assert.deepEqual(fandomGroups(items.filter(i => i.name.toLowerCase().includes('link'))).flatMap(g => g.items.map(i => i.id)), ['l']);
+console.log('Fandom grouping: alphabetical groups/designs, numeric names, casing/spacing variants, missing fandoms, no lost/duplicate items, search subsets and input preservation passed.');

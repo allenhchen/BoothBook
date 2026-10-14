@@ -1,0 +1,27 @@
+import fs from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const output=fs.mkdtempSync(join(tmpdir(),'boothbook-export-'));
+
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const compile = s => ts.transpileModule(s, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const url = 'data:text/javascript;base64,' + Buffer.from(compile(fs.readFileSync('lib/model.ts', 'utf8'))).toString('base64');
+const daysUrl = 'data:text/javascript;base64,' + Buffer.from(compile(fs.readFileSync('lib/convention-days.ts', 'utf8'))).toString('base64');
+const exporter = await import('data:text/javascript;base64,' + Buffer.from(compile(fs.readFileSync('lib/convention-export.ts', 'utf8')).replace("'./model'", JSON.stringify(url)).replace("'./convention-days'", JSON.stringify(daysUrl))).toString('base64'));
+const model = await import(url), w = structuredClone(model.seed);
+w.items.find(i => i.id === 'design-0-foil').fandom = 'Fandom & Friends';
+const result = model.calculate(w, ['design-0-foil', 'design-1-foil', 'design-2-foil'].map((itemId, n) => ({ id: String(n), itemId, poolId: 'p' })), [{ id: 'p', dealId: 'b2g1' }], { kind: 'percent', value: 10 });
+w.sales = [{ id: 'sale', eventId: 'demo-event', date: '2026-10-06T10:00:00Z', reference: '=HYPERLINK("evil")', manualDiscount: { kind: 'percent', value: 10 }, lines: result.lines }];
+const bytes = exporter.conventionWorkbook(w, 'demo-event');
+assert.equal(bytes[0], 80);
+assert.equal(bytes[1], 75);
+fs.writeFileSync(join(output,'boothbook-export-test.xlsx'), bytes);
+fs.writeFileSync(join(output,'boothbook-empty-test.xlsx'), exporter.conventionWorkbook({ ...w, sales: [] }, 'demo-event'));
+w.categories.push({ id: 'invalid', name: 'Transactions[]/?* very very long category name', parentId: null, price: 500 });
+w.items.push({ id: 'i', name: 'Unicode ✨', categoryId: 'invalid' });
+fs.writeFileSync(join(output,'boothbook-names-test.xlsx'), exporter.conventionWorkbook(w, 'demo-event'));
+w.sales.push({ ...w.sales[0], id: 'sale-day-2', saleDate: '2026-10-07' });
+fs.writeFileSync(join(output,'boothbook-daily-test.xlsx'), exporter.conventionWorkbook(w, 'demo-event', '2026-10-07'));
+assert.throws(() => exporter.conventionWorkbook(w, 'missing'), /Choose a convention/);
+console.log('Excel export fixtures generated: discounted convention, empty convention, Unicode and reserved/invalid sheet names.');
