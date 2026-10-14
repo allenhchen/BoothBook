@@ -12,21 +12,46 @@ const port = Number(process.env.BOOTHBOOK_PORT || 4173);
 if (!Number.isInteger(port) || port < 1024 || port > 65535)
   throw Error('BOOTHBOOK_PORT must be between 1024 and 65535.');
 const local = openLocalDatabase(databasePath(), join(root, 'drizzle'));
-const artist: Artist = { id: 'local:owner', email: 'Stored on this computer', displayName: 'Offline workspace', provider: 'local' };
+const artist: Artist = {
+  id: 'local:owner',
+  email: 'Stored on this computer',
+  displayName: 'Offline workspace',
+  provider: 'local',
+};
 const dependencies = { database: () => local.db, authenticatedArtist: async () => artist };
 await openArtistWorkspace(local.db, artist, '', '');
-const workspace = createWorkspaceApi(dependencies), finance = createFinanceApi(dependencies), backup = createBackupApi({ ...dependencies, beforeImport: () => { local.snapshot('before-restore'); } });
+const workspace = createWorkspaceApi(dependencies),
+  finance = createFinanceApi(dependencies),
+  backup = createBackupApi({
+    ...dependencies,
+    beforeImport: () => {
+      local.snapshot('before-restore');
+    },
+  });
 const client = realpathSync(join(root, 'dist-local', 'client'));
-const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpeg': 'image/jpeg', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
+const mime: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.woff2': 'font/woff2',
+  '.ico': 'image/x-icon',
+};
 async function body(req: IncomingMessage) {
-  const chunks: Buffer[] = []; let size = 0; for await (const chunk of req) {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
     size += chunk.length;
-    if (size > 32 * 1024 * 1024)
-      throw Error('Request is too large (maximum 32 MB).');
+    if (size > 32 * 1024 * 1024) throw Error('Request is too large (maximum 32 MB).');
     chunks.push(chunk);
-  } return Buffer.concat(chunks).toString('utf8');
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
-const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const escape = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const server = createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -41,12 +66,16 @@ const server = createServer(async (req, res) => {
       return;
     }
     const origin = `http://${host}`;
-    if (req.headers['sec-fetch-site'] === 'cross-site' || req.headers.origin && req.headers.origin !== origin) {
+    if (
+      req.headers['sec-fetch-site'] === 'cross-site' ||
+      (req.headers.origin && req.headers.origin !== origin)
+    ) {
       res.writeHead(403);
       res.end('Cross-site access is not allowed.');
       return;
     }
-    const url = new URL(req.url || '/', origin), method = req.method || 'GET';
+    const url = new URL(req.url || '/', origin),
+      method = req.method || 'GET';
     if (url.pathname.startsWith('/api/')) {
       if (!['GET', 'POST'].includes(method)) {
         res.writeHead(405);
@@ -55,9 +84,12 @@ const server = createServer(async (req, res) => {
       }
       const h = new Headers();
       for (const [key, value] of Object.entries(req.headers))
-        if (typeof value === 'string')
-          h.set(key, value);
-      const request = new Request(url, { method, headers: h, ...(method === 'POST' ? { body: await body(req) } : {}) });
+        if (typeof value === 'string') h.set(key, value);
+      const request = new Request(url, {
+        method,
+        headers: h,
+        ...(method === 'POST' ? { body: await body(req) } : {}),
+      });
       let response: Response;
       if (url.pathname === '/api/workspace')
         response = method === 'GET' ? await workspace.GET(request) : await workspace.POST(request);
@@ -67,8 +99,7 @@ const server = createServer(async (req, res) => {
         response = method === 'GET' ? await backup.GET() : await backup.POST(request);
       else if (url.pathname === '/api/auth/session' && method === 'GET')
         response = Response.json({ artist, mode: 'standalone', providers: {} });
-      else
-        response = Response.json({ error: 'Not found.' }, { status: 404 });
+      else response = Response.json({ error: 'Not found.' }, { status: 404 });
       res.writeHead(response.status, Object.fromEntries(response.headers));
       res.end(Buffer.from(await response.arrayBuffer()));
       return;
@@ -84,22 +115,45 @@ const server = createServer(async (req, res) => {
       res.end(method === 'HEAD' ? '' : html);
       return;
     }
-    const file = resolve(client, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
-    if (!file.startsWith(client + sep) || !existsSync(file) || !statSync(file).isFile() || !realpathSync(file).startsWith(client + sep)) {
+    const file = resolve(
+      client,
+      '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname),
+    );
+    if (
+      !file.startsWith(client + sep) ||
+      !existsSync(file) ||
+      !statSync(file).isFile() ||
+      !realpathSync(file).startsWith(client + sep)
+    ) {
       res.writeHead(404);
       res.end('Not found.');
       return;
     }
     res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream' });
     res.end(method === 'HEAD' ? undefined : readFileSync(file));
-  }
-  catch (e) {
+  } catch (e) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: e instanceof Error ? e.message : 'Unable to complete the request.' }));
+    res.end(
+      JSON.stringify({ error: e instanceof Error ? e.message : 'Unable to complete the request.' }),
+    );
   }
 });
-server.on('error', e => { console.error(e.message); local.close(); process.exitCode = 1; });
-server.listen(port, '127.0.0.1', () => { console.log(`BoothBook offline: http://127.0.0.1:${port}\nDatabase: ${databasePath()}\nNo internet or login required. Keep this window open; Ctrl+C to stop.`); });
-function stop() { server.close(() => { local.close(); process.exit(0); }); server.closeIdleConnections(); }
+server.on('error', (e) => {
+  console.error(e.message);
+  local.close();
+  process.exitCode = 1;
+});
+server.listen(port, '127.0.0.1', () => {
+  console.log(
+    `BoothBook offline: http://127.0.0.1:${port}\nDatabase: ${databasePath()}\nNo internet or login required. Keep this window open; Ctrl+C to stop.`,
+  );
+});
+function stop() {
+  server.close(() => {
+    local.close();
+    process.exit(0);
+  });
+  server.closeIdleConnections();
+}
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);

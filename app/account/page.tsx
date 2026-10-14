@@ -1,5 +1,43 @@
-import {getChatGPTUser,chatGPTSignInPath,chatGPTSignOutPath} from '@/app/chatgpt-auth';
-import {ThemeToggle} from '@/components/theme-toggle';
-import {Button} from '@/components/ui/button';
-export const dynamic='force-dynamic';
-export default async function Account(){const user=await getChatGPTUser();return <main className="account-page"><ThemeToggle/><a href="/" className="back-link">Back to BoothBook</a><section className="panel inset stack"><p className="eyebrow">YOUR ARTIST ACCOUNT</p><h1>{user?'Account':'Sign in'}</h1><p>Your catalog, deals, conventions, and sales belong to your own artist workspace.</p>{user&&<div className="identity-card"><strong>{user.displayName}</strong><p>{user.email}</p><small>Signed in with ChatGPT</small></div>}<h2>Sign-in options</h2><Button disabled aria-describedby="google-status">Continue with Google</Button><p id="google-status" className="muted">Google sign-in is not configured yet. Use ChatGPT to access this preview.</p>{user?<a href={chatGPTSignOutPath('/account')} target="_top" className="auth-link">Sign out</a>:<a href={chatGPTSignInPath('/')} target="_top" className="auth-link">Continue with ChatGPT</a>}</section></main>}
+import { getChatGPTUser, chatGPTSignInPath, chatGPTSignOutPath } from '@/app/chatgpt-auth';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
+export const dynamic = 'force-dynamic';
+export default async function Account() {
+  const user = await getChatGPTUser();
+  return (
+    <main className="account-page">
+      <ThemeToggle />
+      <a href="/" className="back-link">
+        Back to BoothBook
+      </a>
+      <section className="panel inset stack">
+        <p className="eyebrow">YOUR ARTIST ACCOUNT</p>
+        <h1>{user ? 'Account' : 'Sign in'}</h1>
+        <p>Your catalog, deals, conventions, and sales belong to your own artist workspace.</p>
+        {user && (
+          <div className="identity-card">
+            <strong>{user.displayName}</strong>
+            <p>{user.email}</p>
+            <small>Signed in with ChatGPT</small>
+          </div>
+        )}
+        <h2>Sign-in options</h2>
+        <Button disabled aria-describedby="google-status">
+          Continue with Google
+        </Button>
+        <p id="google-status" className="muted">
+          Google sign-in is not configured yet. Use ChatGPT to access this preview.
+        </p>
+        {user ? (
+          <a href={chatGPTSignOutPath('/account')} target="_top" className="auth-link">
+            Sign out
+          </a>
+        ) : (
+          <a href={chatGPTSignInPath('/')} target="_top" className="auth-link">
+            Continue with ChatGPT
+          </a>
+        )}
+      </section>
+    </main>
+  );
+}

@@ -1,43 +1,315 @@
-import {salesGroups,weightedSales,path,purchasedItems,type Workspace} from './model';
-import {salesForDay,saleDay,dailySummary,validDay} from './convention-days';
-type Cell=string|number;
-type Sheet={name:string;rows:Cell[][];money?:number[]};
-const xml=(value:string)=>value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function column(n:number){let out='';for(n++;n;n=Math.floor((n-1)/26))out=String.fromCharCode(65+(n-1)%26)+out;return out}
+import { salesGroups, weightedSales, path, purchasedItems, type Workspace } from './model';
+import { salesForDay, saleDay, dailySummary, validDay } from './convention-days';
+type Cell = string | number;
+type Sheet = { name: string; rows: Cell[][]; money?: number[] };
+const xml = (value: string) =>
+  value
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+function column(n: number) {
+  let out = '';
+  for (n++; n; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(65 + ((n - 1) % 26)) + out;
+  return out;
+}
 /** Small dependency-free OOXML writer. Strings are inline text, never formulas. */
-function workbook(sheets:Sheet[]){
- const entries:{name:string;data:string}[]=[];const add=(name:string,data:string)=>entries.push({name,data});
- const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
- add('[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`);
- add('_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
- add('xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${xml(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><calcPr calcId="191029"/></workbook>`);
- add('xl/_rels/workbook.xml.rels',`<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
- add('xl/styles.xml',`<?xml version="1.0"?><styleSheet xmlns="${ns}"><numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF294D43"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
- sheets.forEach((sheet,i)=>{const width=Math.max(...sheet.rows.map(r=>r.length)),last=`${column(width-1)}${sheet.rows.length}`;
- add(`xl/worksheets/sheet${i+1}.xml`,`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${ns}"><dimension ref="A1:${last}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${Array.from({length:width},(_,c)=>`<col min="${c+1}" max="${c+1}" width="${Math.min(60,Math.max(14,...sheet.rows.slice(0,200).map(r=>String(r[c]??'').length+2)))}" customWidth="1"/>`).join('')}</cols><sheetData>${sheet.rows.map((row,r)=>`<row r="${r+1}">${row.map((value,c)=>{const attrs=`r="${column(c)}${r+1}" s="${r===0?1:sheet.money?.includes(c)&&typeof value==='number'&&(sheet.name!=='Summary'||r>=4&&r<=6)?2:0}"`;return typeof value==='number'?`<c ${attrs}><v>${value}</v></c>`:`<c ${attrs} t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`}).join('')}</row>`).join('')}</sheetData>${sheet.rows.length>1?`<autoFilter ref="A1:${last}"/>`:''}</worksheet>`);
- });return zip(entries);
+function workbook(sheets: Sheet[]) {
+  const entries: { name: string; data: string }[] = [];
+  const add = (name: string, data: string) => entries.push({ name, data });
+  const ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  add(
+    '[Content_Types].xml',
+    `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`,
+  );
+  add(
+    '_rels/.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+  );
+  add(
+    'xl/workbook.xml',
+    `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${xml(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets><calcPr calcId="191029"/></workbook>`,
+  );
+  add(
+    'xl/_rels/workbook.xml.rels',
+    `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+  );
+  add(
+    'xl/styles.xml',
+    `<?xml version="1.0"?><styleSheet xmlns="${ns}"><numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF294D43"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
+  );
+  sheets.forEach((sheet, i) => {
+    const width = Math.max(...sheet.rows.map((r) => r.length)),
+      last = `${column(width - 1)}${sheet.rows.length}`;
+    add(
+      `xl/worksheets/sheet${i + 1}.xml`,
+      `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${ns}"><dimension ref="A1:${last}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${Array.from({ length: width }, (_, c) => `<col min="${c + 1}" max="${c + 1}" width="${Math.min(60, Math.max(14, ...sheet.rows.slice(0, 200).map((r) => String(r[c] ?? '').length + 2)))}" customWidth="1"/>`).join('')}</cols><sheetData>${sheet.rows
+        .map(
+          (row, r) =>
+            `<row r="${r + 1}">${row
+              .map((value, c) => {
+                const attrs = `r="${column(c)}${r + 1}" s="${r === 0 ? 1 : sheet.money?.includes(c) && typeof value === 'number' && (sheet.name !== 'Summary' || (r >= 4 && r <= 6)) ? 2 : 0}"`;
+                return typeof value === 'number'
+                  ? `<c ${attrs}><v>${value}</v></c>`
+                  : `<c ${attrs} t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
+              })
+              .join('')}</row>`,
+        )
+        .join(
+          '',
+        )}</sheetData>${sheet.rows.length > 1 ? `<autoFilter ref="A1:${last}"/>` : ''}</worksheet>`,
+    );
+  });
+  return zip(entries);
 }
 // ZIP STORE: supports browsers without compression or third-party runtime packages.
-function zip(entries:{name:string;data:string}[]):Uint8Array<ArrayBuffer>{
- const encoder=new TextEncoder(),parts:Uint8Array[]=[],central:Uint8Array[]=[];let offset=0;
- const crc=(data:Uint8Array)=>{let c=0xffffffff;for(const b of data){c^=b;for(let n=0;n<8;n++)c=(c>>>1)^((c&1)?0xedb88320:0)}return (c^0xffffffff)>>>0};
- for(const e of entries){const name=encoder.encode(e.name),data=encoder.encode(e.data),checksum=crc(data);const local=new Uint8Array(30+name.length),v=new DataView(local.buffer);v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x800,true);v.setUint16(12,33,true);v.setUint32(14,checksum,true);v.setUint32(18,data.length,true);v.setUint32(22,data.length,true);v.setUint16(26,name.length,true);local.set(name,30);parts.push(local,data);
- const dir=new Uint8Array(46+name.length),d=new DataView(dir.buffer);d.setUint32(0,0x02014b50,true);d.setUint16(4,20,true);d.setUint16(6,20,true);d.setUint16(8,0x800,true);d.setUint16(14,33,true);d.setUint32(16,checksum,true);d.setUint32(20,data.length,true);d.setUint32(24,data.length,true);d.setUint16(28,name.length,true);d.setUint32(42,offset,true);dir.set(name,46);central.push(dir);offset+=local.length+data.length;
- }
- const size=central.reduce((n,x)=>n+x.length,0),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,entries.length,true);v.setUint16(10,entries.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);const out=new Uint8Array(offset+size+end.length);let pos=0;for(const part of [...parts,...central,end]){out.set(part,pos);pos+=part.length}return out;
+function zip(entries: { name: string; data: string }[]): Uint8Array<ArrayBuffer> {
+  const encoder = new TextEncoder(),
+    parts: Uint8Array[] = [],
+    central: Uint8Array[] = [];
+  let offset = 0;
+  const crc = (data: Uint8Array) => {
+    let c = 0xffffffff;
+    for (const b of data) {
+      c ^= b;
+      for (let n = 0; n < 8; n++) c = (c >>> 1) ^ (c & 1 ? 0xedb88320 : 0);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  for (const e of entries) {
+    const name = encoder.encode(e.name),
+      data = encoder.encode(e.data),
+      checksum = crc(data);
+    const local = new Uint8Array(30 + name.length),
+      v = new DataView(local.buffer);
+    v.setUint32(0, 0x04034b50, true);
+    v.setUint16(4, 20, true);
+    v.setUint16(6, 0x800, true);
+    v.setUint16(12, 33, true);
+    v.setUint32(14, checksum, true);
+    v.setUint32(18, data.length, true);
+    v.setUint32(22, data.length, true);
+    v.setUint16(26, name.length, true);
+    local.set(name, 30);
+    parts.push(local, data);
+    const dir = new Uint8Array(46 + name.length),
+      d = new DataView(dir.buffer);
+    d.setUint32(0, 0x02014b50, true);
+    d.setUint16(4, 20, true);
+    d.setUint16(6, 20, true);
+    d.setUint16(8, 0x800, true);
+    d.setUint16(14, 33, true);
+    d.setUint32(16, checksum, true);
+    d.setUint32(20, data.length, true);
+    d.setUint32(24, data.length, true);
+    d.setUint16(28, name.length, true);
+    d.setUint32(42, offset, true);
+    dir.set(name, 46);
+    central.push(dir);
+    offset += local.length + data.length;
+  }
+  const size = central.reduce((n, x) => n + x.length, 0),
+    end = new Uint8Array(22),
+    v = new DataView(end.buffer);
+  v.setUint32(0, 0x06054b50, true);
+  v.setUint16(8, entries.length, true);
+  v.setUint16(10, entries.length, true);
+  v.setUint32(12, size, true);
+  v.setUint32(16, offset, true);
+  const out = new Uint8Array(offset + size + end.length);
+  let pos = 0;
+  for (const part of [...parts, ...central, end]) {
+    out.set(part, pos);
+    pos += part.length;
+  }
+  return out;
 }
-export function conventionWorkbook(w:Workspace,eventId:string,day=''){
- const event=w.events.find(e=>e.id===eventId);if(!event)throw Error('Choose a convention before exporting.');if(day&&day!=='unassigned'&&(!validDay(day)||day<event.start||day>event.end))throw Error('Choose a day within the convention dates.');const sales=salesForDay(w.sales,event,day),lines=sales.flatMap(s=>s.lines),gross=lines.reduce((n,l)=>n+l.price,0),discount=lines.reduce((n,l)=>n+l.discount,0);
- const sheets:Sheet[]=[{name:'Summary',money:[1],rows:[['Convention',event.name],['Start date',event.start],['End date',event.end],['Application',event.status],['Original value ($)',gross/100],['Discounts ($)',discount/100],['Subtotal before tax ($)',(gross-discount)/100],['Physical items',lines.length],['Paid transactions',sales.length],['Weighted sales',weightedSales(lines)],['Weighting rule','Original item value divided by $10; discounts do not affect weighting'],['Recorded times','UTC (ISO 8601)'],['Exported at',new Date().toISOString()],['Report period',day==='unassigned'?'Outside dates / unassigned':day||'All days']]}];
- sheets.push({name:'Daily summary',money:[3,4,5],rows:[['Sale day','Transactions','Items sold','Original value ($)','Discounts ($)','Subtotal ($)','Weighted sales'],...dailySummary(w.sales,event).filter(d=>!day||d.day===day).map(d=>[d.day==='unassigned'?'Outside dates / unassigned':d.day,d.transactions,d.units,d.gross/100,d.discount/100,d.total/100,d.weighted])]});
- const used=new Set(['daily summary','summary','transactions','sale details','catalog']);
- for(const group of salesGroups(w,lines)){let base=group.root.replace(/[\\/*?:\[\]]/g,' ').replace(/^'+|'+$/g,'').trim()||'Category';base=base.slice(0,31);let name=base,n=2;while(used.has(name.toLowerCase())){const suffix=` (${n++})`;name=base.slice(0,31-suffix.length)+suffix}used.add(name.toLowerCase());
- const rows:Cell[][]=[['Design / item','Fandom',...group.columns.map(c=>c.split(' / ').slice(1).join(' / ')||'Units'),'Total units','Weighted sales']];
- for(const item of group.names.slice().sort((a,b)=>a.localeCompare(b))){const ls=group.lines.filter(l=>l.name===item);rows.push([item,group.fandoms[item],...group.columns.map(c=>ls.filter(l=>l.category===c).length),ls.length,weightedSales(ls)])}
- rows.push(['Total','',...group.columns.map(c=>group.lines.filter(l=>l.category===c).length),group.lines.length,weightedSales(group.lines)]);sheets.push({name,rows});
- }
- sheets.push({name:'Transactions',money:[5,6,7],rows:[['Sale ID','Recorded (UTC)','Purchased items','Deals','Reference','Original value ($)','Discounts ($)','Subtotal ($)','Sale day'],...sales.map(s=>[s.id,s.date,purchasedItems(s).map(i=>`${i.quantity} × ${i.name} (${i.category})`).join('; '),Array.from(new Set(s.lines.map(l=>l.deal).filter(Boolean))).join(', '),s.reference,s.lines.reduce((n,l)=>n+l.price,0)/100,s.lines.reduce((n,l)=>n+l.discount,0)/100,s.lines.reduce((n,l)=>n+l.price-l.discount,0)/100,saleDay(s,event)||'Outside dates / unassigned'])]});
- sheets.push({name:'Sale details',money:[7,8,9],rows:[['Sale ID','Recorded (UTC)','Reference','Item ID','Design / item','Fandom','Category','Original price ($)','Discount ($)','Paid value ($)','Deal','Weighted sales','Sale day'],...sales.flatMap(s=>s.lines.map(l=>[s.id,s.date,s.reference,l.itemId,l.name,l.fandom??w.items.find(i=>i.id===l.itemId)?.fandom??'N/A',l.category,l.price/100,l.discount/100,(l.price-l.discount)/100,l.deal,l.price/1000,saleDay(s,event)||'Outside dates / unassigned']))]});
- sheets.push({name:'Catalog',money:[4],rows:[['Item ID','Design / item','Fandom','Category','Current price ($)'],...w.items.map(i=>[i.id,i.name,i.fandom||'N/A',path(w,i.categoryId).map(c=>c.name).join(' / ')||'N/A',w.categories.find(c=>c.id===i.categoryId)?.price==null?'':w.categories.find(c=>c.id===i.categoryId)!.price!/100])]});
- return workbook(sheets);
+export function conventionWorkbook(w: Workspace, eventId: string, day = '') {
+  const event = w.events.find((e) => e.id === eventId);
+  if (!event) throw Error('Choose a convention before exporting.');
+  if (day && day !== 'unassigned' && (!validDay(day) || day < event.start || day > event.end))
+    throw Error('Choose a day within the convention dates.');
+  const sales = salesForDay(w.sales, event, day),
+    lines = sales.flatMap((s) => s.lines),
+    gross = lines.reduce((n, l) => n + l.price, 0),
+    discount = lines.reduce((n, l) => n + l.discount, 0);
+  const sheets: Sheet[] = [
+    {
+      name: 'Summary',
+      money: [1],
+      rows: [
+        ['Convention', event.name],
+        ['Start date', event.start],
+        ['End date', event.end],
+        ['Application', event.status],
+        ['Original value ($)', gross / 100],
+        ['Discounts ($)', discount / 100],
+        ['Subtotal before tax ($)', (gross - discount) / 100],
+        ['Physical items', lines.length],
+        ['Paid transactions', sales.length],
+        ['Weighted sales', weightedSales(lines)],
+        ['Weighting rule', 'Original item value divided by $10; discounts do not affect weighting'],
+        ['Recorded times', 'UTC (ISO 8601)'],
+        ['Exported at', new Date().toISOString()],
+        ['Report period', day === 'unassigned' ? 'Outside dates / unassigned' : day || 'All days'],
+      ],
+    },
+  ];
+  sheets.push({
+    name: 'Daily summary',
+    money: [3, 4, 5],
+    rows: [
+      [
+        'Sale day',
+        'Transactions',
+        'Items sold',
+        'Original value ($)',
+        'Discounts ($)',
+        'Subtotal ($)',
+        'Weighted sales',
+      ],
+      ...dailySummary(w.sales, event)
+        .filter((d) => !day || d.day === day)
+        .map((d) => [
+          d.day === 'unassigned' ? 'Outside dates / unassigned' : d.day,
+          d.transactions,
+          d.units,
+          d.gross / 100,
+          d.discount / 100,
+          d.total / 100,
+          d.weighted,
+        ]),
+    ],
+  });
+  const used = new Set(['daily summary', 'summary', 'transactions', 'sale details', 'catalog']);
+  for (const group of salesGroups(w, lines)) {
+    let base =
+      group.root
+        .replace(/[\\/*?:\[\]]/g, ' ')
+        .replace(/^'+|'+$/g, '')
+        .trim() || 'Category';
+    base = base.slice(0, 31);
+    let name = base,
+      n = 2;
+    while (used.has(name.toLowerCase())) {
+      const suffix = ` (${n++})`;
+      name = base.slice(0, 31 - suffix.length) + suffix;
+    }
+    used.add(name.toLowerCase());
+    const rows: Cell[][] = [
+      [
+        'Design / item',
+        'Fandom',
+        ...group.columns.map((c) => c.split(' / ').slice(1).join(' / ') || 'Units'),
+        'Total units',
+        'Weighted sales',
+      ],
+    ];
+    for (const item of group.names.slice().sort((a, b) => a.localeCompare(b))) {
+      const ls = group.lines.filter((l) => l.name === item);
+      rows.push([
+        item,
+        group.fandoms[item],
+        ...group.columns.map((c) => ls.filter((l) => l.category === c).length),
+        ls.length,
+        weightedSales(ls),
+      ]);
+    }
+    rows.push([
+      'Total',
+      '',
+      ...group.columns.map((c) => group.lines.filter((l) => l.category === c).length),
+      group.lines.length,
+      weightedSales(group.lines),
+    ]);
+    sheets.push({ name, rows });
+  }
+  sheets.push({
+    name: 'Transactions',
+    money: [5, 6, 7],
+    rows: [
+      [
+        'Sale ID',
+        'Recorded (UTC)',
+        'Purchased items',
+        'Deals',
+        'Reference',
+        'Original value ($)',
+        'Discounts ($)',
+        'Subtotal ($)',
+        'Sale day',
+      ],
+      ...sales.map((s) => [
+        s.id,
+        s.date,
+        purchasedItems(s)
+          .map((i) => `${i.quantity} × ${i.name} (${i.category})`)
+          .join('; '),
+        Array.from(new Set(s.lines.map((l) => l.deal).filter(Boolean))).join(', '),
+        s.reference,
+        s.lines.reduce((n, l) => n + l.price, 0) / 100,
+        s.lines.reduce((n, l) => n + l.discount, 0) / 100,
+        s.lines.reduce((n, l) => n + l.price - l.discount, 0) / 100,
+        saleDay(s, event) || 'Outside dates / unassigned',
+      ]),
+    ],
+  });
+  sheets.push({
+    name: 'Sale details',
+    money: [7, 8, 9],
+    rows: [
+      [
+        'Sale ID',
+        'Recorded (UTC)',
+        'Reference',
+        'Item ID',
+        'Design / item',
+        'Fandom',
+        'Category',
+        'Original price ($)',
+        'Discount ($)',
+        'Paid value ($)',
+        'Deal',
+        'Weighted sales',
+        'Sale day',
+      ],
+      ...sales.flatMap((s) =>
+        s.lines.map((l) => [
+          s.id,
+          s.date,
+          s.reference,
+          l.itemId,
+          l.name,
+          l.fandom ?? w.items.find((i) => i.id === l.itemId)?.fandom ?? 'N/A',
+          l.category,
+          l.price / 100,
+          l.discount / 100,
+          (l.price - l.discount) / 100,
+          l.deal,
+          l.price / 1000,
+          saleDay(s, event) || 'Outside dates / unassigned',
+        ]),
+      ),
+    ],
+  });
+  sheets.push({
+    name: 'Catalog',
+    money: [4],
+    rows: [
+      ['Item ID', 'Design / item', 'Fandom', 'Category', 'Current price ($)'],
+      ...w.items.map((i) => [
+        i.id,
+        i.name,
+        i.fandom || 'N/A',
+        path(w, i.categoryId)
+          .map((c) => c.name)
+          .join(' / ') || 'N/A',
+        w.categories.find((c) => c.id === i.categoryId)?.price == null
+          ? ''
+          : w.categories.find((c) => c.id === i.categoryId)!.price! / 100,
+      ]),
+    ],
+  });
+  return workbook(sheets);
 }
