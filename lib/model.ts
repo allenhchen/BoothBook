@@ -54,6 +54,7 @@ export type Sale = {
   }[];
 };
 export type Workspace = {
+  artTasks?: ArtTask[];
   categories: Category[];
   items: Item[];
   deals: Deal[];
@@ -61,6 +62,14 @@ export type Workspace = {
   sales: Sale[];
   fandomColors?: Record<string, number>;
   finance?: import('./finance').FinanceEntry[];
+};
+export type ArtTask = {
+  id: string;
+  name: string;
+  start: string;
+  deadline: string;
+  status: 'planned' | 'in-progress' | 'completed';
+  notes: string;
 };
 export const seed: Workspace = {
   categories: [

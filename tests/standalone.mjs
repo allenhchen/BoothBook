@@ -27,7 +27,7 @@ async function start() {
   } throw Error('Local startup failed: ' + output);
 }
 async function stop() {
-  if (child.exitCode !== null)
+  if (!child || child.exitCode !== null || child.signalCode !== null)
     return; const done = new Promise(r => child.once('exit', r)); child.kill('SIGTERM'); await done;
 }
 async function post(route, input, extra = {}) {

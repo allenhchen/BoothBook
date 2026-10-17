@@ -49,6 +49,7 @@ import {
 } from '@/lib/offline-store';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { FinancePanel } from '@/components/finance-tabs';
+import { ArtSchedule } from '@/components/art-schedule';
 import { WorkspaceBackup } from '@/components/workspace-backup';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -766,6 +767,10 @@ export default function App() {
               <Wallet />
               Earnings &amp; Expenses
             </TabsTrigger>
+            <TabsTrigger value="art-schedule">
+              <CalendarDays />
+              Art Schedule
+            </TabsTrigger>
           </TabsList>
           <span className="navnote">Your table, organized.</span>
         </div>
@@ -793,6 +798,9 @@ export default function App() {
             onVersion={setVersion}
             onRefresh={() => load(true)}
           />
+        </TabsContent>
+        <TabsContent value="art-schedule">
+          <ArtSchedule workspace={w} busy={busy} onSave={persist} />
         </TabsContent>
         <TabsContent value="catalog">
           <div className="heading">

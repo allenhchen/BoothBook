@@ -14,6 +14,14 @@ import { assignFandomColors } from './fandom-colors';
 const named = z.string().trim().min(1).max(160),
   id = z.string().min(1).max(100);
 const schema = z.object({
+  artTasks: z.array(z.object({
+    id,
+    name: named,
+    start: z.string().refine(validDay, 'Enter a valid start date.'),
+    deadline: z.string().refine(validDay, 'Enter a valid deadline.'),
+    status: z.enum(['planned', 'in-progress', 'completed']),
+    notes: z.string().trim().max(2000),
+  }).refine((task) => task.deadline >= task.start, 'Deadline must be on or after the start date.')).max(10000).optional(),
   fandomColors: z.record(z.number().int().min(0).max(359)).optional(),
   categories: z
     .array(
@@ -66,6 +74,8 @@ const schema = z.object({
 });
 export function validateCatalog(input: unknown) {
   const parsed = schema.parse(input);
+  if (new Set(parsed.artTasks?.map((task) => task.id)).size !== (parsed.artTasks?.length || 0))
+    throw Error('Art tasks must have unique IDs.');
   if (!validCategoryDepth(parsed.categories)) throw Error('Only one subcategory level is allowed.');
   for (const d of parsed.deals) {
     if ((!d.kind || d.kind === 'free') && d.free < 1)
