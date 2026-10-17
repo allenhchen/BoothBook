@@ -1006,7 +1006,7 @@ export default function App() {
                 </div>
               </div>
               {catalogView === 'grid' && (
-                <p className="catalog-grid-sort">Grouped by fandom · A–Z</p>
+                <p className="catalog-grid-sort">Item name · A–Z</p>
               )}
               {catalogGroups(w, visibleItems).map((group) => {
                 const expanded =
