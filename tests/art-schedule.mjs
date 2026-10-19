@@ -16,6 +16,10 @@ const task = { id: 'winter-print', name: 'Winter print', start: '2026-12-20', de
 const data = { ...store.emptyWorkspace, artTasks: [task] };
 assert.equal(validateCatalog(store.emptyWorkspace).artTasks, undefined);
 assert.equal(JSON.stringify(validateCatalog(data).artTasks), JSON.stringify([task]));
+for (const start of ['', undefined]) {
+  const withoutStart = { ...task, start };
+  assert.equal(validateCatalog({ ...data, artTasks: [withoutStart] }).artTasks[0].deadline, task.deadline);
+}
 for (const patch of [
   { start: '2026-02-30' },
   { deadline: '2026-12-19' },
@@ -31,9 +35,10 @@ try {
   assert.equal(await store.writeArtistWorkspace(db, artist.id, 0, data), true);
   const saved = await store.readArtistWorkspace(db, artist.id);
   assert.equal(JSON.stringify(saved.data.artTasks), JSON.stringify([task]));
-  const edited = { ...saved.data, artTasks: [{ ...task, status: 'completed' }] };
+  const edited = { ...saved.data, artTasks: [{ ...task, start: '', status: 'completed' }] };
   assert.equal(await store.writeArtistWorkspace(db, artist.id, saved.version, edited), true);
   assert.equal((await store.readArtistWorkspace(db, artist.id)).data.artTasks[0].status, 'completed');
+  assert.equal((await store.readArtistWorkspace(db, artist.id)).data.artTasks[0].start, '');
   assert.equal(await store.writeArtistWorkspace(db, artist.id, saved.version, data), false);
   const latest = await store.readArtistWorkspace(db, artist.id);
   assert.equal(await store.writeArtistWorkspace(db, artist.id, latest.version, { ...latest.data, artTasks: [] }), true);

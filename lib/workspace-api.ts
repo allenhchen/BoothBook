@@ -17,11 +17,11 @@ const schema = z.object({
   artTasks: z.array(z.object({
     id,
     name: named,
-    start: z.string().refine(validDay, 'Enter a valid start date.'),
+    start: z.string().refine((value) => !value || validDay(value), 'Enter a valid start date.').optional(),
     deadline: z.string().refine(validDay, 'Enter a valid deadline.'),
     status: z.enum(['planned', 'in-progress', 'completed']),
     notes: z.string().trim().max(2000),
-  }).refine((task) => task.deadline >= task.start, 'Deadline must be on or after the start date.')).max(10000).optional(),
+  }).refine((task) => !task.start || task.deadline >= task.start, 'Deadline must be on or after the start date.')).max(10000).optional(),
   fandomColors: z.record(z.number().int().min(0).max(359)).optional(),
   categories: z
     .array(

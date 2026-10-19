@@ -66,7 +66,7 @@ export type Workspace = {
 export type ArtTask = {
   id: string;
   name: string;
-  start: string;
+  start?: string;
   deadline: string;
   status: 'planned' | 'in-progress' | 'completed';
   notes: string;
