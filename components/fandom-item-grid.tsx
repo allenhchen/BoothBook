@@ -27,7 +27,7 @@ export function FandomItemGrid({
           onClick={() => onSelect(item)}
         >
           <strong>{item.name}</strong>
-          <FandomBadge name={item.fandom || ''} colors={colors} iconOnly />
+          <FandomBadge name={item.fandom || ''} colors={colors} />
         </button>
       ))}
     </div>
