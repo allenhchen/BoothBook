@@ -9,6 +9,8 @@ assert.deepEqual(eventsForYear(events, '2026').map(e => e.id), ['new']);
 assert.equal(eventsForYear(events, '').length, 2);
 assert.equal(eventsForYear(events, '2024').length, 0);
 const w = { ...seed, categories: [], items: [] };
+const printColumns = salesGroups(seed, []).find(group => group.root === 'Prints').columns;
+assert(printColumns.indexOf('Prints / Standard prints') < printColumns.indexOf('Prints / Mini prints'));
 const group = salesGroups(w, [line('Zulu', 2500), line('Alpha', 2500), line('Beta', 3500), line('Zulu', 2500)])[0];
 assert.deepEqual(sortSalesNames(group, 'name', 1), ['Alpha', 'Beta', 'Zulu']);
 assert.deepEqual(sortSalesNames(group, 'weighted', -1), ['Zulu', 'Beta', 'Alpha']);

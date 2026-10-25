@@ -49,7 +49,7 @@ export function FinancePanel({
   onVersion: (v: number) => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [year, setYear] = useState(''),
+  const [year, setYear] = useState(() => String(new Date().getFullYear())),
     [data, setData] = useState<FinanceData | null>(null),
     [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false),

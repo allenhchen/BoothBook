@@ -238,14 +238,22 @@ export function removeItem(w: Workspace, id: string): Workspace {
     deals: w.deals.map((d) => ({ ...d, itemIds: d.itemIds.filter((i) => i !== id) })),
   };
 }
-/** Display parents immediately followed by their descendants, regardless of creation order. */
+/** Display parents before descendants, with standard prints before mini prints. */
 export function orderedCategories(categories: Category[]): Category[] {
+  const printOrder = (category: Category) => {
+    const index = ['standard prints', 'mini prints'].indexOf(category.name.toLowerCase());
+    return index === -1 ? 2 : index;
+  };
   const sorted = categories
     .slice()
     .sort(
-      (a, b) =>
-        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) ||
-        a.id.localeCompare(b.id),
+      (a, b) => {
+        const aOrder = printOrder(a), bOrder = printOrder(b);
+        if (aOrder !== bOrder)
+          return aOrder - bOrder;
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) ||
+          a.id.localeCompare(b.id);
+      },
     );
   const result: Category[] = [],
     seen = new Set<string>();

@@ -158,8 +158,8 @@ export default function App() {
   const [dailySort, setDailySort] = useState<{
       column: 'day' | 'transactions' | 'units' | 'total' | 'discount' | 'weighted';
       direction: number;
-    }>({ column: 'day', direction: 1 }),
-    [year, setYear] = useState(''),
+    }>({ column: 'weighted', direction: -1 }),
+    [year, setYear] = useState(() => String(new Date().getFullYear())),
     [reportSort, setReportSort] = useState<
       Record<
         string,
@@ -248,7 +248,7 @@ export default function App() {
           j.data.categories.find((c) => !j.data.categories.some((x) => x.parentId === c.id))?.id ||
             '',
         );
-        setEvent(eventsForYear(j.data.events, '').find((e) => e.status === 'accepted')?.id || '');
+        setEvent(eventsForYear(j.data.events, year).find((e) => e.status === 'accepted')?.id || '');
       }
     } catch (e) {
       if (
@@ -264,7 +264,7 @@ export default function App() {
             setVersion(cached.version);
             if (!preserveSelection)
               setEvent(
-                eventsForYear(cached.data.events, '').find((e) => e.status === 'accepted')?.id ||
+                eventsForYear(cached.data.events, year).find((e) => e.status === 'accepted')?.id ||
                   '',
               );
             setNotice('Offline — using saved catalog on this device.');
@@ -591,12 +591,12 @@ export default function App() {
       .join(' / '),
   }));
   const conventionEvents = eventsForYear(w.events, year);
-  const years = Array.from(new Set(w.events.map((e) => e.start.slice(0, 4))))
+  const years = Array.from(new Set([String(new Date().getFullYear()), ...w.events.map((e) => e.start.slice(0, 4))]))
     .sort()
     .reverse()
     .map((id) => ({ id, name: id }));
   const dashboardAccepted = conventionEvents.filter((e) => e.status === 'accepted');
-  const accepted = eventsForYear(w.events, '').filter((e) => e.status === 'accepted');
+  const accepted = conventionEvents.filter((e) => e.status === 'accepted');
   let calc: ReturnType<typeof calculate> = {
       lines: [],
       gross: 0,
@@ -652,7 +652,7 @@ export default function App() {
     }
   }
   function reportHeader(root: string, column: string, label: string) {
-    const current = reportSort[root] || { column: 'name', direction: 1 };
+    const current = reportSort[root] || { column: 'weighted', direction: -1 };
     return (
       <TableHead
         key={column}
@@ -1247,6 +1247,16 @@ export default function App() {
               <p>Build the basket, arrange deal pools, then log the paid sale.</p>
             </div>
             <div className="convention-controls">
+              <Pick
+                label="All years"
+                value={year}
+                options={years}
+                onChange={(v) => {
+                  setYear(v);
+                  const matching = eventsForYear(w.events, v).filter((e) => e.status === 'accepted');
+                  if (!matching.some((e) => e.id === eventId)) setEvent(matching[0]?.id || '');
+                }}
+              />
               <Pick
                 label="Select accepted convention"
                 value={eventId}
@@ -2109,8 +2119,8 @@ export default function App() {
                           <TableBody>
                             {sortSalesNames(
                               group,
-                              reportSort[group.root]?.column || 'name',
-                              reportSort[group.root]?.direction || 1,
+                              reportSort[group.root]?.column || 'weighted',
+                              reportSort[group.root]?.direction || -1,
                             ).map((name) => {
                               const lines = group.lines.filter((l) => l.name === name);
                               return (
