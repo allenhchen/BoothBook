@@ -190,7 +190,7 @@ export default function App() {
   const [sort, setSort] = useState<{
     column: 'name' | 'category' | 'price' | 'fandom';
     direction: number;
-  }>({ column: 'name', direction: 1 });
+  }>({ column: 'fandom', direction: 1 });
   const [dealKind, setDealKind] = useState<'free' | 'amount' | 'percent'>('free'),
     [discountValue, setDiscountValue] = useState('10');
   const [customKind, setCustomKind] = useState<'amount' | 'percent'>('amount'),
@@ -1014,7 +1014,7 @@ export default function App() {
                 </div>
               </div>
               {catalogView === 'grid' && (
-                <p className="catalog-grid-sort">Item name · A–Z</p>
+                <p className="catalog-grid-sort">Fandom · A–Z, then item name · A–Z</p>
               )}
               {catalogGroups(w, visibleItems).map((group) => {
                 const expanded =
@@ -2018,6 +2018,7 @@ export default function App() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead scope="col">#</TableHead>
                               {(
                                 [
                                   { column: 'day', label: 'Sale day' },
@@ -2072,6 +2073,7 @@ export default function App() {
                               )
                               .map((day) => (
                                 <TableRow key={day.day}>
+                                  <TableCell className="number">{daily.findIndex((d) => d.day === day.day) + 1}</TableCell>
                                   <TableCell>
                                     <Button variant="ghost" onClick={() => setReportDay(day.day)}>
                                       {day.day === 'unassigned'
@@ -2103,6 +2105,7 @@ export default function App() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead scope="col">#</TableHead>
                               {reportHeader(group.root, 'name', 'Design / item')}
                               {reportHeader(group.root, 'fandom', 'Fandom')}
                               {group.columns.map((category) =>
@@ -2125,6 +2128,7 @@ export default function App() {
                               const lines = group.lines.filter((l) => l.name === name);
                               return (
                                 <TableRow key={name}>
+                                  <TableCell className="number">{group.rowNumbers[name]}</TableCell>
                                   <TableCell>{name}</TableCell>
                                   <TableCell>
                                     <div className="fandom-badges">
@@ -2170,6 +2174,7 @@ export default function App() {
                               );
                             })}
                             <TableRow className="total-row">
+                              <TableCell />
                               <TableCell>Total</TableCell>
                               <TableCell>—</TableCell>
                               {group.columns.map((category) => (
@@ -2195,6 +2200,7 @@ export default function App() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead scope="col">#</TableHead>
                             {[
                               { column: 'saleDate', label: 'Sale day' },
                               { column: 'date', label: 'Recorded' },
@@ -2242,15 +2248,17 @@ export default function App() {
                             sales,
                             transactionSort.column,
                             transactionSort.direction,
+                            w,
                           ).map((s) => (
                             <TableRow key={s.id}>
+                              <TableCell className="number">{sales.findIndex((sale) => sale.id === s.id) + 1}</TableCell>
                               <TableCell>
                                 {saleDay(s, selected) || 'Outside dates / unassigned'}
                               </TableCell>
                               <TableCell>{new Date(s.date).toLocaleString()}</TableCell>
                               <TableCell>
                                 <ul className="purchased-items">
-                                  {purchasedItems(s).map((item, n) => (
+                                  {purchasedItems(s, w).map((item, n) => (
                                     <li key={n}>
                                       {item.quantity} × {item.name}
                                       <small>{item.category}</small>

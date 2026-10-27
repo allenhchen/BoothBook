@@ -1,4 +1,4 @@
-import { salesGroups, weightedSales, path, purchasedItems, type Workspace } from './model';
+import { salesGroups, weightedSales, path, purchasedItems, saleItemName, type Workspace } from './model';
 import { salesForDay, saleDay, dailySummary, validDay } from './convention-days';
 type Cell = string | number;
 type Sheet = { name: string; rows: Cell[][]; money?: number[] };
@@ -243,7 +243,7 @@ export function conventionWorkbook(w: Workspace, eventId: string, day = '') {
       ...sales.map((s) => [
         s.id,
         s.date,
-        purchasedItems(s)
+        purchasedItems(s, w)
           .map((i) => `${i.quantity} × ${i.name} (${i.category})`)
           .join('; '),
         Array.from(new Set(s.lines.map((l) => l.deal).filter(Boolean))).join(', '),
@@ -280,7 +280,7 @@ export function conventionWorkbook(w: Workspace, eventId: string, day = '') {
           s.date,
           s.reference,
           l.itemId,
-          l.name,
+          saleItemName(w, l),
           l.fandom ?? w.items.find((i) => i.id === l.itemId)?.fandom ?? 'N/A',
           l.category,
           l.price / 100,

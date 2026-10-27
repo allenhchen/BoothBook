@@ -10,10 +10,12 @@ assert.equal(eventsForYear(events, '').length, 2);
 assert.equal(eventsForYear(events, '2024').length, 0);
 const w = { ...seed, categories: [], items: [] };
 const printColumns = salesGroups(seed, []).find(group => group.root === 'Prints').columns;
-assert(printColumns.indexOf('Prints / Standard prints') < printColumns.indexOf('Prints / Mini prints'));
+assert.deepEqual(printColumns, ['Prints / Foil prints', 'Prints / Standard prints', 'Prints / Mini prints']);
 const group = salesGroups(w, [line('Zulu', 2500), line('Alpha', 2500), line('Beta', 3500), line('Zulu', 2500)])[0];
 assert.deepEqual(sortSalesNames(group, 'name', 1), ['Alpha', 'Beta', 'Zulu']);
 assert.deepEqual(sortSalesNames(group, 'weighted', -1), ['Zulu', 'Beta', 'Alpha']);
+assert.deepEqual(sortSalesNames(group, 'weighted', -1).map(name => group.rowNumbers[name]), [3, 2, 1]);
+assert.deepEqual(sortSalesNames(group, 'name', 1).map(name => group.rowNumbers[name]), [1, 2, 3]);
 assert.deepEqual(sortSalesNames(group, 'units', -1), ['Zulu', 'Alpha', 'Beta']);
 assert.deepEqual(sortSalesNames(group, 'Standees / Single-layer', 1), ['Alpha', 'Beta', 'Zulu']);
 const sales = [{ id: 'a', date: '2026-01-01', reference: 'B', lines: [line('A', 2500)] }, { id: 'b', date: '2026-02-01', reference: 'A', lines: [line('B', 3500)] }];
@@ -27,3 +29,23 @@ const legacyGroup = salesGroups(fandomWorkspace, [line('A', 2500)])[0];
 assert.equal(legacyGroup.fandoms.A, 'Current fandom');
 assert.equal(weightedSales([line('A', 2500, 1000), line('A', 2500, 2500)]), 5);
 console.log('Fandom snapshots and legacy fallback; $10 weighted sales baseline passed.');
+const { purchasedItems } = await import('../lib/model.ts');
+const renamed = structuredClone(seed);
+const originalName = renamed.items.find(i => i.id === 'design-0-foil').name;
+const recorded = [
+  { ...line(originalName, 4000, 500, 'Prints / Foil prints'), itemId: 'design-0-foil' },
+  { ...line('Earlier name', 4000, 0, 'Prints / Foil prints'), itemId: 'design-0-foil' },
+];
+const snapshot = structuredClone(recorded);
+renamed.items.find(i => i.id === 'design-0-foil').name = 'Renamed design';
+const renamedGroup = salesGroups(renamed, recorded).find(g => g.root === 'Prints');
+assert.equal(renamedGroup.lines.filter(l => l.name === 'Renamed design').length, 2);
+assert(!renamedGroup.names.includes('Earlier name'));
+assert.equal(weightedSales(renamedGroup.lines), 8);
+const transaction = { id: 'renamed', lines: recorded };
+assert.deepEqual(purchasedItems(transaction, renamed), [{ name: 'Renamed design', category: 'Prints / Foil prints', quantity: 2 }]);
+renamed.items = renamed.items.filter(i => i.id !== 'design-0-foil');
+assert.deepEqual(purchasedItems(transaction, renamed).map(i => i.name), [originalName, 'Earlier name']);
+assert.deepEqual(salesGroups(renamed, recorded).find(g => g.root === 'Prints').lines.map(l => l.name), [originalName, 'Earlier name']);
+assert.deepEqual(recorded, snapshot);
+console.log('Renamed items resolve by ID across historical names; deleted items retain recorded names; sales snapshots stay unchanged.');

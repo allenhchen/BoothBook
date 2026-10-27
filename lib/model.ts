@@ -238,11 +238,11 @@ export function removeItem(w: Workspace, id: string): Workspace {
     deals: w.deals.map((d) => ({ ...d, itemIds: d.itemIds.filter((i) => i !== id) })),
   };
 }
-/** Display parents before descendants, with standard prints before mini prints. */
+/** Display parents before descendants, with foil, standard, then mini prints. */
 export function orderedCategories(categories: Category[]): Category[] {
   const printOrder = (category: Category) => {
-    const index = ['standard prints', 'mini prints'].indexOf(category.name.toLowerCase());
-    return index === -1 ? 2 : index;
+    const index = ['foil prints', 'standard prints', 'mini prints'].indexOf(category.name.trim().toLowerCase());
+    return index === -1 ? 3 : index;
   };
   const sorted = categories
     .slice()
@@ -332,7 +332,13 @@ export function assignUnit(
     throw Error('This item is not eligible for that deal.');
   return units.map((u) => (u.id === unitId ? { ...u, poolId } : u));
 }
+/** Resolve a display name without changing the recorded sale snapshot. */
+export function saleItemName(w: Pick<Workspace, 'items'>, line: Sale['lines'][number]) {
+  return w.items.find((item) => item.id === line.itemId)?.name ?? line.name;
+}
 export function salesGroups(w: Workspace, lines: Sale['lines']) {
+  // Resolve IDs before combining variants into the same design row.
+  lines = lines.map((line) => ({ ...line, name: saleItemName(w, line) }));
   const labels = Array.from(
     new Set([
       ...orderedCategories(w.categories)
@@ -371,10 +377,14 @@ export function salesGroups(w: Workspace, lines: Sale['lines']) {
         ];
       }),
     );
-    return { root, columns, lines: members, names, fandoms };
+    const rowNumbers = Object.fromEntries(
+      names.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) || a.localeCompare(b))
+        .map((name, index) => [name, index + 1]),
+    );
+    return { root, columns, lines: members, names, fandoms, rowNumbers };
   });
 }
-export function purchasedItems(sale: Sale) {
+export function purchasedItems(sale: Sale, w?: Pick<Workspace, 'items'>) {
   const grouped = new Map<
     string,
     {
@@ -384,8 +394,9 @@ export function purchasedItems(sale: Sale) {
     }
   >();
   for (const line of sale.lines) {
-    const key = JSON.stringify([line.name, line.category]);
-    const entry = grouped.get(key) || { name: line.name, category: line.category, quantity: 0 };
+    const name = w ? saleItemName(w, line) : line.name;
+    const key = JSON.stringify([name, line.category]);
+    const entry = grouped.get(key) || { name, category: line.category, quantity: 0 };
     entry.quantity++;
     grouped.set(key, entry);
   }
@@ -441,7 +452,7 @@ export function sortSalesNames(
     );
   });
 }
-export function sortedSales(sales: Sale[], column: string, direction: number) {
+export function sortedSales(sales: Sale[], column: string, direction: number, w?: Pick<Workspace, 'items'>) {
   return sales.slice().sort((a, b) => {
     const value = (s: Sale) =>
       column === 'saleDate'
@@ -449,7 +460,7 @@ export function sortedSales(sales: Sale[], column: string, direction: number) {
         : column === 'date'
           ? s.date
           : column === 'items'
-            ? purchasedItems(s)
+            ? purchasedItems(s, w)
                 .map((i) => i.name)
                 .join(', ')
             : column === 'deals'

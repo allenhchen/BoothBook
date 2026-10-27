@@ -24,4 +24,11 @@ fs.writeFileSync(join(output,'boothbook-names-test.xlsx'), exporter.conventionWo
 w.sales.push({ ...w.sales[0], id: 'sale-day-2', saleDate: '2026-10-07' });
 fs.writeFileSync(join(output,'boothbook-daily-test.xlsx'), exporter.conventionWorkbook(w, 'demo-event', '2026-10-07'));
 assert.throws(() => exporter.conventionWorkbook(w, 'missing'), /Choose a convention/);
+const salesSnapshot = structuredClone(w.sales);
+w.items.find(i => i.id === 'design-0-foil').name = 'Renamed export design';
+const renamedWorkbook = new TextDecoder().decode(exporter.conventionWorkbook(w, 'demo-event'));
+// The workbook uses uncompressed ZIP entries, so cell XML can be inspected directly.
+assert(renamedWorkbook.includes('Renamed export design'));
+assert(renamedWorkbook.split('Renamed export design').length >= 5);
+assert.deepEqual(w.sales, salesSnapshot);
 console.log('Excel export fixtures generated: discounted convention, empty convention, Unicode and reserved/invalid sheet names.');
