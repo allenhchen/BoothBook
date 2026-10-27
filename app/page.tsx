@@ -2071,9 +2071,9 @@ export default function App() {
                                       : Number(a[dailySort.column]) -
                                         Number(b[dailySort.column])) || a.day.localeCompare(b.day),
                               )
-                              .map((day) => (
+                              .map((day, index) => (
                                 <TableRow key={day.day}>
-                                  <TableCell className="number">{daily.findIndex((d) => d.day === day.day) + 1}</TableCell>
+                                  <TableCell className="number">{index + 1}</TableCell>
                                   <TableCell>
                                     <Button variant="ghost" onClick={() => setReportDay(day.day)}>
                                       {day.day === 'unassigned'
@@ -2124,11 +2124,11 @@ export default function App() {
                               group,
                               reportSort[group.root]?.column || 'weighted',
                               reportSort[group.root]?.direction || -1,
-                            ).map((name) => {
+                            ).map((name, index) => {
                               const lines = group.lines.filter((l) => l.name === name);
                               return (
                                 <TableRow key={name}>
-                                  <TableCell className="number">{group.rowNumbers[name]}</TableCell>
+                                  <TableCell className="number">{index + 1}</TableCell>
                                   <TableCell>{name}</TableCell>
                                   <TableCell>
                                     <div className="fandom-badges">

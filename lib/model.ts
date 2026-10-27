@@ -377,11 +377,7 @@ export function salesGroups(w: Workspace, lines: Sale['lines']) {
         ];
       }),
     );
-    const rowNumbers = Object.fromEntries(
-      names.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) || a.localeCompare(b))
-        .map((name, index) => [name, index + 1]),
-    );
-    return { root, columns, lines: members, names, fandoms, rowNumbers };
+    return { root, columns, lines: members, names, fandoms };
   });
 }
 export function purchasedItems(sale: Sale, w?: Pick<Workspace, 'items'>) {

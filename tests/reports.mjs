@@ -14,8 +14,6 @@ assert.deepEqual(printColumns, ['Prints / Foil prints', 'Prints / Standard print
 const group = salesGroups(w, [line('Zulu', 2500), line('Alpha', 2500), line('Beta', 3500), line('Zulu', 2500)])[0];
 assert.deepEqual(sortSalesNames(group, 'name', 1), ['Alpha', 'Beta', 'Zulu']);
 assert.deepEqual(sortSalesNames(group, 'weighted', -1), ['Zulu', 'Beta', 'Alpha']);
-assert.deepEqual(sortSalesNames(group, 'weighted', -1).map(name => group.rowNumbers[name]), [3, 2, 1]);
-assert.deepEqual(sortSalesNames(group, 'name', 1).map(name => group.rowNumbers[name]), [1, 2, 3]);
 assert.deepEqual(sortSalesNames(group, 'units', -1), ['Zulu', 'Alpha', 'Beta']);
 assert.deepEqual(sortSalesNames(group, 'Standees / Single-layer', 1), ['Alpha', 'Beta', 'Zulu']);
 const sales = [{ id: 'a', date: '2026-01-01', reference: 'B', lines: [line('A', 2500)] }, { id: 'b', date: '2026-02-01', reference: 'A', lines: [line('B', 3500)] }];
