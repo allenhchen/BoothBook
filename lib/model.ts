@@ -409,6 +409,22 @@ export function removeDeal(w: Workspace, pools: Pool[], units: Unit[], id: strin
 export function weightedSales(lines: Sale['lines']) {
   return lines.reduce((sum, line) => sum + line.price, 0) / 1000;
 }
+export function weightedSalesBreakdown(
+  lines: Sale['lines'],
+  nameFor: (line: Sale['lines'][number]) => string,
+) {
+  const amounts = new Map<string, number>();
+  for (const line of lines) {
+    const name = nameFor(line) || 'N/A';
+    amounts.set(name, (amounts.get(name) || 0) + line.price);
+  }
+  const total = lines.reduce((sum, line) => sum + line.price, 0);
+  return Array.from(amounts, ([name, amount]) => ({
+    name,
+    weighted: amount / 1000,
+    percentage: total ? (amount / total) * 100 : 0,
+  })).sort((a, b) => b.weighted - a.weighted || a.name.localeCompare(b.name));
+}
 export function eventsForYear(events: Event[], year: string) {
   return events
     .filter((e) => !year || e.start.slice(0, 4) === year)
@@ -416,6 +432,9 @@ export function eventsForYear(events: Event[], year: string) {
       (a, b) =>
         a.start.localeCompare(b.start) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
     );
+}
+export function nextAcceptedConvention(events: Event[], today: string) {
+  return eventsForYear(events, '').find((event) => event.status === 'accepted' && event.end >= today);
 }
 export function sortSalesNames(
   group: ReturnType<typeof salesGroups>[number],

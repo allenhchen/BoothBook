@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
@@ -53,6 +53,7 @@ export function FinancePanel({
     [data, setData] = useState<FinanceData | null>(null),
     [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false),
+    [earningsRedacted, setEarningsRedacted] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const [form, setForm] = useState<{
@@ -89,6 +90,9 @@ export function FinancePanel({
     form.type === 'earning' &&
     form.category === 'convention' &&
     (form.eventId === '__manual' || form.eventId.startsWith('historical:'));
+  function earningAmount(amount: number) {
+    return earningsRedacted ? <span aria-label="Earnings hidden">••••</span> : money(amount);
+  }
   async function load() {
     const id = ++requestId.current;
     setLoading(true);
@@ -245,7 +249,9 @@ export function FinancePanel({
                           'Removed convention')}
                   </TableCell>
                 )}
-                <TableCell className="number">{money(e.amount)}</TableCell>
+                <TableCell className="number">
+                  {e.type === 'earning' ? earningAmount(e.amount) : money(e.amount)}
+                </TableCell>
                 <TableCell>
                   <div className="finance-actions">
                     <Button
@@ -282,7 +288,9 @@ export function FinancePanel({
             <TableRow className="total-row">
               <TableCell colSpan={showCategory ? 3 : 2}>Total</TableCell>
               <TableCell className="number">
-                {money(entries.reduce((n, e) => n + e.amount, 0))}
+                {entries.length > 0 && entries.every((e) => e.type === 'earning')
+                  ? earningAmount(entries.reduce((n, e) => n + e.amount, 0))
+                  : money(entries.reduce((n, e) => n + e.amount, 0))}
               </TableCell>
               <TableCell />
             </TableRow>
@@ -322,6 +330,15 @@ export function FinancePanel({
               ))}
           </select>
         </label>
+        <Button
+          type="button"
+          variant="outline"
+          aria-pressed={earningsRedacted}
+          onClick={() => setEarningsRedacted((redacted) => !redacted)}
+        >
+          {earningsRedacted ? <Eye size={16} /> : <EyeOff size={16} />}
+          {earningsRedacted ? 'Show earnings' : 'Hide earnings'}
+        </Button>
       </div>
       {error && (
         <div className="alert" role="alert">
@@ -341,7 +358,7 @@ export function FinancePanel({
         <div className="stats">
           <div>
             <span>Total earnings</span>
-            <b>{money(summary.earningsTotal)}</b>
+            <b>{earningAmount(summary.earningsTotal)}</b>
           </div>
           <div>
             <span>Total expenses</span>
@@ -349,11 +366,11 @@ export function FinancePanel({
           </div>
           <div>
             <span>Earnings minus expenses</span>
-            <b className={summary.net < 0 ? 'red' : 'green'}>{money(summary.net)}</b>
+            <b className={summary.net < 0 ? 'red' : 'green'}>{earningAmount(summary.net)}</b>
           </div>
           <div>
             <span>Convention earnings</span>
-            <b>{money(summary.conventionTotal)}</b>
+            <b>{earningAmount(summary.conventionTotal)}</b>
           </div>
         </div>
       )}
@@ -576,7 +593,7 @@ export function FinancePanel({
                         )}
                       </small>
                     </TableCell>
-                    <TableCell className="number">{money(c.total)}</TableCell>
+                    <TableCell className="number">{earningAmount(c.total)}</TableCell>
                     <TableCell>
                       {c.entries.map((entry) => (
                         <div className="finance-actions" key={entry.id}>
@@ -584,7 +601,11 @@ export function FinancePanel({
                             variant="ghost"
                             disabled={disabled}
                             aria-label={'Edit earnings for ' + c.name + ' on ' + entry.date}
-                            title={'Edit ' + money(entry.amount) + ' on ' + entry.date}
+                            title={
+                              earningsRedacted
+                                ? 'Edit earnings on ' + entry.date
+                                : 'Edit ' + money(entry.amount) + ' on ' + entry.date
+                            }
                             onClick={() => edit(entry)}
                           >
                             Edit
@@ -614,7 +635,7 @@ export function FinancePanel({
                 ))}
                 <TableRow className="total-row">
                   <TableCell>Convention total</TableCell>
-                  <TableCell className="number">{money(summary.conventionTotal)}</TableCell>
+                  <TableCell className="number">{earningAmount(summary.conventionTotal)}</TableCell>
                   <TableCell />
                 </TableRow>
               </TableBody>

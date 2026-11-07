@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, type FormEvent } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CategoryItemGrid } from '@/components/category-item-grid';
 import {
@@ -67,6 +67,7 @@ import {
   Wallet,
   LayoutGrid,
   List,
+  Pencil,
 } from 'lucide-react';
 import {
   calculate,
@@ -86,11 +87,14 @@ import {
   orderedCategories,
   removeCategory,
   removeItem,
+  weightedSalesBreakdown,
   type Workspace,
   type Item,
   type Unit,
   type Pool,
   type Deal,
+  type Sale,
+  nextAcceptedConvention,
 } from '@/lib/model';
 import {
   conventionDays,
@@ -100,6 +104,14 @@ import {
   dailySummary,
 } from '@/lib/convention-days';
 const uid = () => crypto.randomUUID();
+const localToday = () => {
+  const date = new Date();
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+};
 function Pick({
   value,
   onChange,
@@ -146,7 +158,7 @@ export default function App() {
     [tab, setTab] = useState('catalog');
   const [units, setUnits] = useState<Unit[]>([]),
     [pools, setPools] = useState<Pool[]>([]),
-    [eventId, setEvent] = useState('demo-event'),
+    [eventId, setEvent] = useState(''),
     [reference, setReference] = useState(''),
     [query, setQuery] = useState('');
   const [catName, setCatName] = useState(''),
@@ -175,7 +187,11 @@ export default function App() {
     [dashboardOpen, setDashboardOpen] = useState(false),
     [reportLoading, setReportLoading] = useState(false),
     [exporting, setExporting] = useState(false),
-    [reportEvent, setReportEvent] = useState('');
+    [reportEvent, setReportEvent] = useState(''),
+    [transactionQuery, setTransactionQuery] = useState(''),
+    [editingSale, setEditingSale] = useState<Sale | null>(null),
+    [saleEditItems, setSaleEditItems] = useState<string[]>([]),
+    [saleEditPaid, setSaleEditPaid] = useState('');
   const fandomColors = useMemo(() => (w ? workspaceFandomColors(w) : {}), [w]);
   const reportCache = useRef(new Map<string, Workspace>());
   const [catalogView, setCatalogView] = useState<'grid' | 'table'>('grid'),
@@ -248,7 +264,9 @@ export default function App() {
           j.data.categories.find((c) => !j.data.categories.some((x) => x.parentId === c.id))?.id ||
             '',
         );
-        setEvent(eventsForYear(j.data.events, year).find((e) => e.status === 'accepted')?.id || '');
+        const next = nextAcceptedConvention(j.data.events, localToday());
+        setYear(next?.start.slice(0, 4) || String(new Date().getFullYear()));
+        setEvent(next?.id || '');
       }
     } catch (e) {
       if (
@@ -262,11 +280,11 @@ export default function App() {
             setArtist(cached.artist);
             setW(cached.data);
             setVersion(cached.version);
-            if (!preserveSelection)
-              setEvent(
-                eventsForYear(cached.data.events, year).find((e) => e.status === 'accepted')?.id ||
-                  '',
-              );
+            if (!preserveSelection) {
+              const next = nextAcceptedConvention(cached.data.events, localToday());
+              setYear(next?.start.slice(0, 4) || String(new Date().getFullYear()));
+              setEvent(next?.id || '');
+            }
             setNotice('Offline — using saved catalog on this device.');
             return;
           }
@@ -425,9 +443,9 @@ export default function App() {
           setDashboardOpen(false);
           setReportEvent('');
           setReportDay('');
-          setEvent(
-            eventsForYear(j.data.events, year).find((e) => e.status === 'accepted')?.id || '',
-          );
+          const next = nextAcceptedConvention(j.data.events, localToday());
+          setYear(next?.start.slice(0, 4) || String(new Date().getFullYear()));
+          setEvent(next?.id || '');
         }
       }
       setNotice(
@@ -450,6 +468,71 @@ export default function App() {
     } catch (e) {
       setError((e as Error).message);
       return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  function editTransaction(sale: Sale) {
+    setEditingSale(sale);
+    setSaleEditItems(sale.lines.map((line) => line.itemId));
+    setSaleEditPaid(
+      (sale.lines.reduce((sum, line) => sum + line.price - line.discount, 0) / 100).toFixed(2),
+    );
+    setError('');
+  }
+  async function saveTransactionEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingSale) return;
+    const paid = Number(saleEditPaid);
+    if (!Number.isFinite(paid) || paid < 0) {
+      setError('Enter an amount paid of zero or more.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/workspace', {
+        method: 'POST',
+        credentials: 'same-origin',
+        redirect: 'manual',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          version,
+          action: 'edit-sale',
+          saleId: editingSale.id,
+          itemIds: saleEditItems,
+          amountPaid: Math.round(paid * 100),
+        }),
+      });
+      const result = (await workspaceResponse(response)) as {
+        data: Workspace;
+        version: number;
+        error?: string;
+      };
+      if (!response.ok) throw Error(result.error || 'Unable to update this transaction.');
+      setW((old) =>
+        old
+          ? {
+              ...old,
+              ...result.data,
+              sales: [
+                ...old.sales.filter((sale) => sale.eventId !== editingSale.eventId),
+                ...result.data.sales,
+              ],
+            }
+          : result.data,
+      );
+      setVersion(result.version);
+      reportCache.current.clear();
+      if (artist && artist.provider !== 'local')
+        void cacheReport({ ...result, artist }, editingSale.eventId).catch(() =>
+          setNotice('Transaction updated online. Offline dashboard cache update failed.'),
+        );
+      setNotice('Transaction updated. Dashboard totals refreshed.');
+      setEditingSale(null);
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -590,6 +673,14 @@ export default function App() {
       .map((x) => x.name)
       .join(' / '),
   }));
+  const editableSaleItems = w.items.filter((item) => {
+    const category = w.categories.find((candidate) => candidate.id === item.categoryId);
+    return (
+      !!category &&
+      category.price !== null &&
+      !w.categories.some((candidate) => candidate.parentId === category.id)
+    );
+  });
   const conventionEvents = eventsForYear(w.events, year);
   const years = Array.from(new Set([String(new Date().getFullYear()), ...w.events.map((e) => e.start.slice(0, 4))]))
     .sort()
@@ -628,6 +719,22 @@ export default function App() {
     allLines = sales.flatMap((s) => s.lines),
     total = allLines.reduce((a, l) => a + l.price - l.discount, 0);
   const reportGroups = salesGroups(w, allLines);
+  const categoryBreakdown = weightedSalesBreakdown(allLines, (line) => line.category),
+    fandomBreakdown = weightedSalesBreakdown(allLines, (line) =>
+      line.fandom ?? w.items.find((item) => item.id === line.itemId)?.fandom ?? '',
+    ),
+    transactionSales = sortedSales(
+      sales,
+      transactionSort.column,
+      transactionSort.direction,
+      w,
+    ).filter((sale) => {
+      const search = transactionQuery.trim().toLocaleLowerCase();
+      return (
+        !search ||
+        purchasedItems(sale, w).some((item) => item.name.toLocaleLowerCase().includes(search))
+      );
+    });
   const dayOptions = selected
       ? conventionDays(selected).map((id, n) => ({ id, name: `Day ${n + 1} · ${id}` }))
       : [],
@@ -2009,6 +2116,60 @@ export default function App() {
                         <b>{money(allLines.reduce((a, l) => a + l.discount, 0))}</b>
                       </div>
                     </div>
+                    <div className="dashboard-breakdowns">
+                      {[
+                        {
+                          title: 'Weighted sales by category',
+                          label: 'Category',
+                          values: categoryBreakdown,
+                        },
+                        {
+                          title: 'Weighted sales by fandom',
+                          label: 'Fandom',
+                          values: fandomBreakdown,
+                        },
+                      ].map(({ title, label, values }) => (
+                        <section className="panel sales-category" key={title}>
+                          <div className="panel-title">
+                            <h2>{title}</h2>
+                            <span>Share of total weighted sales</span>
+                          </div>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead scope="col">#</TableHead>
+                                <TableHead scope="col">{label}</TableHead>
+                                <TableHead scope="col">Weighted sales</TableHead>
+                                <TableHead scope="col">Share</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {values.map((entry, index) => (
+                                <TableRow key={entry.name}>
+                                  <TableCell className="number row-number">{index + 1}</TableCell>
+                                  <TableCell>{entry.name}</TableCell>
+                                  <TableCell className="number">
+                                    {entry.weighted.toLocaleString(undefined, {
+                                      maximumFractionDigits: 3,
+                                    })}
+                                  </TableCell>
+                                  <TableCell className="number">
+                                    {entry.percentage.toFixed(1)}%
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {!values.length && (
+                                <TableRow>
+                                  <TableCell colSpan={4}>
+                                    No weighted sales for this period.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </section>
+                      ))}
+                    </div>
                     {!reportDay && (
                       <section className="panel sales-category">
                         <div className="panel-title">
@@ -2073,7 +2234,7 @@ export default function App() {
                               )
                               .map((day, index) => (
                                 <TableRow key={day.day}>
-                                  <TableCell className="number">{index + 1}</TableCell>
+                                  <TableCell className="number row-number">{index + 1}</TableCell>
                                   <TableCell>
                                     <Button variant="ghost" onClick={() => setReportDay(day.day)}>
                                       {day.day === 'unassigned'
@@ -2128,8 +2289,10 @@ export default function App() {
                               const lines = group.lines.filter((l) => l.name === name);
                               return (
                                 <TableRow key={name}>
-                                  <TableCell className="number">{index + 1}</TableCell>
-                                  <TableCell>{name}</TableCell>
+                                  <TableCell className="number row-number">{index + 1}</TableCell>
+                                  <TableCell>
+                                    <strong>{name}</strong>
+                                  </TableCell>
                                   <TableCell>
                                     <div className="fandom-badges">
                                       {Array.from(
@@ -2196,6 +2359,13 @@ export default function App() {
                     <section className="panel transactions">
                       <div className="panel-title">
                         <h2>Transaction log</h2>
+                        <Input
+                          className="transaction-search"
+                          aria-label="Search transactions by purchased items"
+                          placeholder="Search purchased items…"
+                          value={transactionQuery}
+                          onChange={(event) => setTransactionQuery(event.target.value)}
+                        />
                       </div>
                       <Table>
                         <TableHeader>
@@ -2207,7 +2377,7 @@ export default function App() {
                               { column: 'items', label: 'Purchased items' },
                               { column: 'deals', label: 'Deals' },
                               { column: 'reference', label: 'Reference' },
-                              { column: 'subtotal', label: 'Subtotal' },
+                              { column: 'subtotal', label: 'Amount paid' },
                             ].map(({ column, label }) => (
                               <TableHead
                                 key={column}
@@ -2244,14 +2414,9 @@ export default function App() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {sortedSales(
-                            sales,
-                            transactionSort.column,
-                            transactionSort.direction,
-                            w,
-                          ).map((s) => (
+                          {transactionSales.map((s, index) => (
                             <TableRow key={s.id}>
-                              <TableCell className="number">{sales.findIndex((sale) => sale.id === s.id) + 1}</TableCell>
+                              <TableCell className="number row-number">{index + 1}</TableCell>
                               <TableCell>
                                 {saleDay(s, selected) || 'Outside dates / unassigned'}
                               </TableCell>
@@ -2260,7 +2425,7 @@ export default function App() {
                                 <ul className="purchased-items">
                                   {purchasedItems(s, w).map((item, n) => (
                                     <li key={n}>
-                                      {item.quantity} × {item.name}
+                                      {item.quantity} × <strong>{item.name}</strong>
                                       <small>{item.category}</small>
                                     </li>
                                   ))}
@@ -2279,6 +2444,14 @@ export default function App() {
                                 <Button
                                   variant="ghost"
                                   disabled={busy}
+                                  aria-label={`Edit transaction from ${new Date(s.date).toLocaleString()}`}
+                                  onClick={() => editTransaction(s)}
+                                >
+                                  <Pencil size={16} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  disabled={busy}
                                   aria-label={`Delete sale from ${new Date(s.date).toLocaleString()}`}
                                   onClick={() =>
                                     setDeletion({ kind: 'sale', id: s.id, name: 'this sale' })
@@ -2291,10 +2464,11 @@ export default function App() {
                           ))}
                         </TableBody>
                       </Table>
-                      {!sales.length && (
+                      {!transactionSales.length && (
                         <p className="inset muted">
-                          No sales for {reportDay ? 'this day' : 'this convention'} yet. Record a
-                          paid basket in Checkout.
+                          {transactionQuery.trim()
+                            ? 'No transactions match the purchased item search.'
+                            : `No sales for ${reportDay ? 'this day' : 'this convention'} yet. Record a paid basket in Checkout.`}
                         </p>
                       )}
                     </section>
@@ -2407,6 +2581,129 @@ export default function App() {
                   Cancel
                 </Button>
                 <Button disabled={busy}>Save changes</Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!editingSale}
+        onOpenChange={(open) => {
+          if (!open && !busy) setEditingSale(null);
+        }}
+      >
+        <DialogContent className="sale-editor" showCloseButton={!busy}>
+          <DialogHeader>
+            <DialogTitle>Edit transaction</DialogTitle>
+            <DialogDescription>
+              Replace purchased items and update the amount paid. The original transaction date and
+              reference are preserved.
+            </DialogDescription>
+          </DialogHeader>
+          {editingSale && (
+            <form className="sale-editor-form" onSubmit={saveTransactionEdit}>
+              <div className="sale-edit-items">
+                {saleEditItems.map((itemId, index) => {
+                  const existingItem = w.items.find((item) => item.id === itemId);
+                  return (
+                    <div className="sale-edit-item" key={index}>
+                      <label>
+                        Item {index + 1}
+                        <select
+                          className="finance-select"
+                          required
+                          disabled={busy}
+                          value={itemId}
+                          onChange={(event) =>
+                            setSaleEditItems((old) =>
+                              old.map((id, itemIndex) =>
+                                itemIndex === index ? event.target.value : id,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="" disabled>
+                            Choose item
+                          </option>
+                          {!editableSaleItems.some((item) => item.id === itemId) && (
+                            <option value={itemId}>
+                              {existingItem?.name || 'Unavailable item'} — choose a replacement
+                            </option>
+                          )}
+                          {editableSaleItems.map((item) => {
+                            const category = w.categories.find((c) => c.id === item.categoryId)!;
+                            return (
+                              <option key={item.id} value={item.id}>
+                                {item.name} —{' '}
+                                {path(w, category.id).map((part) => part.name).join(' / ')} (
+                                {money(category.price!)})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={`Remove item ${index + 1}`}
+                        onClick={() =>
+                          setSaleEditItems((old) =>
+                            old.filter((_, itemIndex) => itemIndex !== index),
+                          )
+                        }
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || !editableSaleItems.length || saleEditItems.length >= 500}
+                onClick={() =>
+                  setSaleEditItems((old) => [...old, editableSaleItems[0]!.id])
+                }
+              >
+                <Plus size={16} />
+                Add item
+              </Button>
+              <label>
+                Amount paid ($)
+                <Input
+                  required
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="0.01"
+                  disabled={busy}
+                  value={saleEditPaid}
+                  onChange={(event) => setSaleEditPaid(event.target.value)}
+                />
+              </label>
+              <p className="muted">
+                Each row is one physical item. Any discount is recalculated across the selected
+                items, and the original deal labels are cleared.
+              </p>
+              {error && (
+                <p className="red" role="alert">
+                  {error}
+                </p>
+              )}
+              <div className="sale-editor-actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setEditingSale(null)}
+                >
+                  Cancel
+                </Button>
+                <Button disabled={busy || !saleEditItems.length}>
+                  {busy ? 'Saving…' : 'Save transaction'}
+                </Button>
               </div>
             </form>
           )}

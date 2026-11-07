@@ -1,13 +1,28 @@
 import assert from 'node:assert/strict';
-import { weightedSales, eventsForYear, salesGroups, sortSalesNames, sortedSales, seed } from '../lib/model.ts';
+import { weightedSales, weightedSalesBreakdown, eventsForYear, nextAcceptedConvention, salesGroups, sortSalesNames, sortedSales, seed } from '../lib/model.ts';
 const line = (name, price, discount = 0, category = 'Standees / Single-layer') => ({ itemId: name, name, price, discount, category, deal: '' });
 assert.equal(weightedSales([line('A', 2500, 500), line('A', 2500, 500)]), 5);
 assert.equal(weightedSales([line('A', 4000), line('A', 4000), line('A', 4000, 4000)]), 12);
 assert.equal(weightedSales([line('A', 4000, 4000)]), 4);
+assert.deepEqual(weightedSalesBreakdown([
+  line('A', 2500, 0, 'Prints'),
+  line('B', 7500, 0, 'Charms'),
+], entry => entry.category), [
+  { name: 'Charms', weighted: 7.5, percentage: 75 },
+  { name: 'Prints', weighted: 2.5, percentage: 25 },
+]);
 const events = [{ ...seed.events[0], id: 'old', start: '2025-12-31', end: '2026-01-01' }, { ...seed.events[0], id: 'new', start: '2026-01-01' }];
 assert.deepEqual(eventsForYear(events, '2026').map(e => e.id), ['new']);
 assert.equal(eventsForYear(events, '').length, 2);
 assert.equal(eventsForYear(events, '2024').length, 0);
+assert.equal(nextAcceptedConvention([
+  { ...seed.events[0], id: 'past', start: '2025-01-01', end: '2025-01-03' },
+  { ...seed.events[0], id: 'current', start: '2026-10-06', end: '2026-10-08' },
+  { ...seed.events[0], id: 'future', start: '2027-01-01', end: '2027-01-03' },
+], '2026-10-07').id, 'current');
+assert.equal(nextAcceptedConvention([
+  { ...seed.events[0], id: 'past', start: '2025-01-01', end: '2025-01-03' },
+], '2026-10-07'), undefined);
 const w = { ...seed, categories: [], items: [] };
 const printColumns = salesGroups(seed, []).find(group => group.root === 'Prints').columns;
 assert.deepEqual(printColumns, ['Prints / Foil prints', 'Prints / Standard prints', 'Prints / Mini prints']);

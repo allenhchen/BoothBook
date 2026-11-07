@@ -193,3 +193,31 @@ assert.equal(JSON.stringify(conventionRenamed.data.sales), JSON.stringify(salesB
 assert.equal(conventionRenamed.data.events.find(e => e.id === renameEvent.id).start, renameEvent.start);
 assert.equal(conventionRenamed.data.events.find(e => e.id === renameEvent.id).status, renameEvent.status);
 console.log('Convention rename persists without changing identity, dates, application status or recorded sales.');
+latest = await store.readArtistWorkspace(db, artist.id);
+const saleToEdit = latest.data.sales.find(s => s.eventId === renameEvent.id);
+response = await route.POST(request({
+  version: latest.version,
+  action: 'edit-sale',
+  saleId: saleToEdit.id,
+  itemIds: ['design-0-foil', 'charm-1'],
+  amountPaid: 3500,
+}));
+assert.equal(response.status, 200);
+const editedSale = (await response.json()).data.sales.find(s => s.id === saleToEdit.id);
+assert.deepEqual(editedSale.lines.map(line => line.itemId), ['design-0-foil', 'charm-1']);
+assert.equal(editedSale.lines.reduce((sum, line) => sum + line.price - line.discount, 0), 3500);
+assert.equal(editedSale.lines.reduce((sum, line) => sum + line.discount, 0), 2500);
+assert(editedSale.lines.every(line => line.deal === ''));
+assert.equal(editedSale.date, saleToEdit.date);
+assert.equal(editedSale.reference, saleToEdit.reference);
+latest = await store.readArtistWorkspace(db, artist.id);
+response = await route.POST(request({
+  version: latest.version,
+  action: 'edit-sale',
+  saleId: saleToEdit.id,
+  itemIds: ['design-0-foil'],
+  amountPaid: 100000,
+}));
+assert.equal(response.status, 400);
+assert.equal((await store.readArtistWorkspace(db, artist.id)).version, latest.version);
+console.log('Transaction edits replace item snapshots, reconcile amount paid and discounts, preserve receipt metadata, and reject amounts above selected item prices.');

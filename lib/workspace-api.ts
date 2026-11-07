@@ -7,7 +7,7 @@ import {
   type Database,
   type Artist,
 } from './artist-store';
-import { calculate, validCategoryDepth, type Workspace } from './model';
+import { calculate, path, validCategoryDepth, type Workspace } from './model';
 import { z } from 'zod';
 import { validDay, defaultSaleDay } from './convention-days';
 import { assignFandomColors } from './fandom-colors';
@@ -163,6 +163,8 @@ export function createWorkspaceApi({
           version: z.number().int(),
           action: z.string(),
           saleId: id.optional(),
+          itemIds: z.array(id).min(1).max(500).optional(),
+          amountPaid: z.number().int().min(0).max(100000000).optional(),
           clientSaleId: z.string().uuid().optional(),
           expectedLines: z.unknown().optional(),
           recordedAt: z.string().datetime({ offset: true }).optional(),
@@ -199,7 +201,7 @@ export function createWorkspaceApi({
         }
       }
       const scope =
-        payload.action === 'delete-sale'
+        payload.action === 'delete-sale' || payload.action === 'edit-sale'
           ? await saleEvent(db, artist.id, payload.saleId || '')
           : payload.action === 'sale' ||
               payload.action === 'delete-convention' ||
@@ -228,6 +230,55 @@ export function createWorkspaceApi({
         if (!current.sales.some((s) => s.id === saleId))
           throw Error('Sale no longer exists. Reload your dashboard.');
         next = { ...current, sales: current.sales.filter((s) => s.id !== saleId) };
+      } else if (payload.action === 'edit-sale') {
+        const saleId = id.parse(payload.saleId);
+        const sale = current.sales.find((s) => s.id === saleId);
+        if (!sale) throw Error('Sale no longer exists. Reload your dashboard.');
+        const itemIds = z.array(id).min(1).max(500).parse(payload.itemIds);
+        const amountPaid = z.number().int().min(0).max(100000000).parse(payload.amountPaid);
+        const lines = itemIds.map((itemId) => {
+          const item = current.items.find((candidate) => candidate.id === itemId);
+          const category =
+            item && current.categories.find((candidate) => candidate.id === item.categoryId);
+          if (
+            !item ||
+            !category ||
+            category.price === null ||
+            current.categories.some((c) => c.parentId === category.id)
+          )
+            throw Error('Choose an item with a saved price.');
+          return {
+            itemId,
+            name: item.name,
+            fandom: item.fandom || '',
+            category: path(current, category.id).map((part) => part.name).join(' / '),
+            price: category.price,
+            discount: 0,
+            deal: '',
+          };
+        });
+        const gross = lines.reduce((sum, line) => sum + line.price, 0);
+        if (amountPaid > gross)
+          throw Error('Amount paid cannot exceed the full price of the selected items.');
+        let remainingDiscount = gross - amountPaid;
+        const updatedLines = lines.map((line, index) => {
+          const discount =
+            index === lines.length - 1
+              ? remainingDiscount
+              : gross
+                ? Number((BigInt(gross - amountPaid) * BigInt(line.price)) / BigInt(gross))
+                : 0;
+          remainingDiscount -= discount;
+          return { ...line, discount };
+        });
+        next = {
+          ...current,
+          sales: current.sales.map((entry) =>
+            entry.id === saleId
+              ? { ...entry, manualDiscount: undefined, lines: updatedLines }
+              : entry,
+          ),
+        };
       } else if (payload.action === 'sale') {
         const event = current.events.find((e) => e.id === payload.eventId);
         if (!event || event.status !== 'accepted') throw Error('Select an accepted convention.');
