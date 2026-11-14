@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useMemo, type FormEvent } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CategoryItemGrid } from '@/components/category-item-grid';
+import { WeightedSalesPie } from '@/components/weighted-sales-pie';
 import {
   Dialog,
   DialogContent,
@@ -2134,39 +2135,7 @@ export default function App() {
                             <h2>{title}</h2>
                             <span>Share of total weighted sales</span>
                           </div>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead scope="col">#</TableHead>
-                                <TableHead scope="col">{label}</TableHead>
-                                <TableHead scope="col">Weighted sales</TableHead>
-                                <TableHead scope="col">Share</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {values.map((entry, index) => (
-                                <TableRow key={entry.name}>
-                                  <TableCell className="number row-number">{index + 1}</TableCell>
-                                  <TableCell>{entry.name}</TableCell>
-                                  <TableCell className="number">
-                                    {entry.weighted.toLocaleString(undefined, {
-                                      maximumFractionDigits: 3,
-                                    })}
-                                  </TableCell>
-                                  <TableCell className="number">
-                                    {entry.percentage.toFixed(1)}%
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                              {!values.length && (
-                                <TableRow>
-                                  <TableCell colSpan={4}>
-                                    No weighted sales for this period.
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
+                          <WeightedSalesPie values={values} label={label} />
                         </section>
                       ))}
                     </div>
