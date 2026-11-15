@@ -29,6 +29,7 @@ const schema = z.object({
         id,
         name: named,
         parentId: id.nullable(),
+        order: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
         price: z.number().int().min(0).max(10000000).nullable(),
       }),
     )

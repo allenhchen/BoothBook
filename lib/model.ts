@@ -3,6 +3,7 @@ export type Category = {
   name: string;
   parentId: string | null;
   price: number | null;
+  order?: number;
 };
 export type Item = {
   id: string;
@@ -238,7 +239,7 @@ export function removeItem(w: Workspace, id: string): Workspace {
     deals: w.deals.map((d) => ({ ...d, itemIds: d.itemIds.filter((i) => i !== id) })),
   };
 }
-/** Display parents before descendants, with foil, standard, then mini prints. */
+/** Keep saved parent order; display subcategories by descending price, unpriced last. */
 export function orderedCategories(categories: Category[]): Category[] {
   const printOrder = (category: Category) => {
     const index = ['foil prints', 'standard prints', 'mini prints'].indexOf(category.name.trim().toLowerCase());
@@ -248,6 +249,10 @@ export function orderedCategories(categories: Category[]): Category[] {
     .slice()
     .sort(
       (a, b) => {
+        if (a.order !== undefined || b.order !== undefined) {
+          const difference = (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
+          if (difference) return difference;
+        }
         const aOrder = printOrder(a), bOrder = printOrder(b);
         if (aOrder !== bOrder)
           return aOrder - bOrder;
@@ -261,11 +266,29 @@ export function orderedCategories(categories: Category[]): Category[] {
     if (seen.has(c.id)) return;
     seen.add(c.id);
     result.push(c);
-    sorted.filter((child) => child.parentId === c.id).forEach(visit);
+    sorted
+      .filter((child) => child.parentId === c.id)
+      .sort((a, b) => (b.price ?? -1) - (a.price ?? -1))
+      .forEach(visit);
   }
   sorted.filter((c) => c.parentId === null).forEach(visit);
   sorted.forEach(visit);
   return result;
+}
+/** Move top-level categories, keeping their children together. */
+export function moveCategory(categories: Category[], id: string, direction: -1 | 1): Category[] {
+  const ordered = orderedCategories(categories);
+  const category = ordered.find((c) => c.id === id);
+  if (!category || category.parentId !== null) return categories;
+  const siblings = ordered.filter((c) => c.parentId === category.parentId);
+  const index = siblings.findIndex((c) => c.id === id);
+  const neighbor = siblings[index + direction];
+  if (!neighbor) return categories;
+  const ranks = new Map(ordered.map((c, index) => [c.id, index]));
+  const rank = ranks.get(id)!;
+  ranks.set(id, ranks.get(neighbor.id)!);
+  ranks.set(neighbor.id, rank);
+  return categories.map((c) => ({ ...c, order: ranks.get(c.id)! }));
 }
 /** Parent groups preserve the caller's item sorting, including N/A items. */
 export function catalogGroups(w: Workspace, items: Item[]) {

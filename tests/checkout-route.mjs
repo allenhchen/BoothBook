@@ -9,6 +9,9 @@ const { sqlite, db } = createTestDatabase();
 const store = loadTypeScript('lib/artist-store.ts');
 const artist = { id: 'chatgpt:test', email: 'test@example.test', displayName: 'Test', provider: 'chatgpt' };
 const workspaceApi = loadTypeScript('lib/workspace-api.ts', { './artist-store': store, './model': model, './convention-days': days, './fandom-colors': fandom, zod: { z } });
+const reordered = { ...structuredClone(model.seed), categories: model.moveCategory(model.seed.categories, 'standees', -1) };
+assert.deepEqual(workspaceApi.validateCatalog(reordered).categories, reordered.categories);
+assert.throws(() => workspaceApi.validateCatalog({ ...reordered, categories: reordered.categories.map(c => ({ ...c, order: -1 })) }));
 const route = loadTypeScript('app/api/workspace/route.ts', { 'cloudflare:workers': { env: {} }, '@/lib/artist-auth': { authenticatedArtist: async () => artist }, '@/lib/storage': { database: () => db }, '@/lib/workspace-api': workspaceApi });
 const initial = await route.GET();
 assert.equal(initial.status, 200);
@@ -221,3 +224,29 @@ response = await route.POST(request({
 assert.equal(response.status, 400);
 assert.equal((await store.readArtistWorkspace(db, artist.id)).version, latest.version);
 console.log('Transaction edits replace item snapshots, reconcile amount paid and discounts, preserve receipt metadata, and reject amounts above selected item prices.');
+latest = await store.readArtistWorkspace(db, artist.id);
+const previousSales = JSON.stringify(latest.data.sales);
+const conventionToChange = latest.data.events[0];
+response = await route.POST(request({ version: latest.version, action: 'workspace', data: {
+  ...latest.data, events: latest.data.events.map(e => e.id === conventionToChange.id ? { ...e, start: '2026-10-01', end: '2026-10-31' } : e),
+} }));
+assert.equal(response.status, 200);
+latest = await store.readArtistWorkspace(db, artist.id);
+assert.equal(latest.data.events.find(e => e.id === conventionToChange.id).end, '2026-10-31');
+assert.equal(JSON.stringify(latest.data.sales), previousSales);
+const dealToChange = latest.data.deals[0];
+for (const kind of ['free', 'amount', 'percent']) {
+  const changed = { ...dealToChange, kind, buy: 4, free: kind === 'free' ? 2 : 0, discountValue: kind === 'amount' ? 500 : 15, categoryIds: ['prints'] };
+  response = await route.POST(request({ version: latest.version, action: 'workspace', data: {
+    ...latest.data, deals: latest.data.deals.map(d => d.id === changed.id ? changed : d),
+  } }));
+  assert.equal(response.status, 200);
+  latest = await store.readArtistWorkspace(db, artist.id);
+  assert.deepEqual(JSON.parse(JSON.stringify(latest.data.deals.find(d => d.id === changed.id))), JSON.parse(JSON.stringify(changed)));
+  assert.equal(JSON.stringify(latest.data.sales), previousSales);
+}
+response = await route.POST(request({ version: latest.version, action: 'workspace', data: {
+  ...latest.data, events: latest.data.events.map(e => ({ ...e, start: '2026-10-31', end: '2026-10-01' })),
+} }));
+assert.equal(response.status, 400);
+console.log('Convention dates and all bundle types update in place, preserve recorded sales, and reject reversed dates.');

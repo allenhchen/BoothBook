@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { seed, removeCategory, removeItem, calculate, path, orderedCategories } from '../lib/model.ts';
+import { seed, removeCategory, removeItem, calculate, path, orderedCategories, moveCategory, catalogGroups } from '../lib/model.ts';
 const w = structuredClone(seed);
 w.sales = [{ id: 'sale', eventId: 'demo-event', date: '2026-10-06', reference: '', lines: [{ itemId: 'design-0-mini', name: 'The Proclamation', category: 'Prints / Mini prints', price: 1500, discount: 0, deal: '' }] }];
 let next = removeCategory(w, 'prints');
@@ -27,6 +27,17 @@ const nested = [...added.categories, { id: 'nested', name: 'Nested', parentId: '
 assert.deepEqual(orderedCategories(nested).filter(c => ['standees', 'multi', 'single', 'nested'].includes(c.id)).map(c => c.id), ['standees', 'multi', 'single', 'nested']);
 assert.equal(orderedCategories(nested).length, nested.length);
 console.log('Category ordering passed: appended Single-Layer stays under Standees; parent names are alphabetical; nested children stay with parents.');
+const movedRoots = moveCategory(added.categories, 'standees', -1);
+assert.deepEqual(orderedCategories(movedRoots).filter(c => !c.parentId).map(c => c.id), ['charms', 'standees', 'prints']);
+assert.deepEqual(catalogGroups({ ...added, categories: movedRoots }, added.items).map(g => g.id), ['charms', 'standees', 'prints']);
+const movedChildren = moveCategory(movedRoots, 'mini', -1);
+assert.deepEqual(movedChildren, movedRoots);
+assert.deepEqual(orderedCategories(movedChildren).filter(c => c.parentId === 'prints').map(c => c.id), ['foil', 'standard', 'mini']);
+assert.deepEqual(orderedCategories(JSON.parse(JSON.stringify(movedChildren))).map(c => c.id), orderedCategories(movedChildren).map(c => c.id));
+assert.deepEqual(moveCategory(movedChildren, 'charms', -1), movedChildren);
+assert.deepEqual(moveCategory(movedChildren, 'standard', 1), movedChildren);
+assert(added.categories.every(c => c.order === undefined));
+console.log('Custom category order persists, moves parents with children, and drives checkout groups.');
 const { validCategoryDepth, sortedItems } = await import('../lib/model.ts');
 assert(validCategoryDepth(added.categories));
 assert(!validCategoryDepth(nested));

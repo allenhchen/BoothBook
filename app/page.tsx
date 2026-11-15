@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useMemo, type FormEvent } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CategoryItemGrid } from '@/components/category-item-grid';
+import { ConventionDateEditor, DealEditor } from '@/components/catalog-editors';
 import { WeightedSalesPie } from '@/components/weighted-sales-pie';
 import {
   Dialog,
@@ -65,6 +66,8 @@ import {
   Layers,
   Check,
   ChevronDown,
+  ArrowUp,
+  ArrowDown,
   Wallet,
   LayoutGrid,
   List,
@@ -86,6 +89,7 @@ import {
   sortedItems,
   catalogGroups,
   orderedCategories,
+  moveCategory,
   removeCategory,
   removeItem,
   weightedSalesBreakdown,
@@ -94,6 +98,7 @@ import {
   type Unit,
   type Pool,
   type Deal,
+  type Event,
   type Sale,
   nextAcceptedConvention,
 } from '@/lib/model';
@@ -198,6 +203,8 @@ export default function App() {
   const [catalogView, setCatalogView] = useState<'grid' | 'table'>('grid'),
     [editingItem, setEditingItem] = useState<Item | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [editingConvention, setEditingConvention] = useState<Event | null>(null);
   useEffect(() => setExpandedCategories({}), [query]);
   const [deletion, setDeletion] = useState<{
     kind: 'category' | 'item' | 'sale' | 'deal' | 'convention';
@@ -928,6 +935,7 @@ export default function App() {
                 <h2>Categories</h2>
                 <span>{w.categories.length}</span>
               </div>
+              <p className="muted inset">Reorder categories with the arrows. Subcategories appear from highest to lowest price.</p>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -991,6 +999,23 @@ export default function App() {
                         )}
                       </TableCell>
                       <TableCell>
+                        {!c.parentId && ([-1, 1] as const).map((direction) => {
+                          const siblings = catalogCategories.filter((x) => x.parentId === c.parentId);
+                          const index = siblings.findIndex((x) => x.id === c.id);
+                          const label = `Move ${c.name} ${direction === -1 ? 'up' : 'down'}`;
+                          return (
+                            <Button
+                              key={direction}
+                              variant="ghost"
+                              disabled={busy || !siblings[index + direction]}
+                              aria-label={label}
+                              title={label}
+                              onClick={() => patch({ ...w, categories: moveCategory(w.categories, c.id, direction) })}
+                            >
+                              {direction === -1 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                            </Button>
+                          );
+                        })}
                         <Button
                           variant="ghost"
                           disabled={busy}
@@ -1012,9 +1037,10 @@ export default function App() {
                     await persist({
                       ...w,
                       categories: [
-                        ...w.categories,
+                        ...catalogCategories.map((c, order) => ({ ...c, order })),
                         {
                           id: uid(),
+                          order: catalogCategories.length,
                           name: catName,
                           parentId: parent || null,
                           price: catPrice === '' ? null : Math.round(Number(catPrice) * 100),
@@ -1754,6 +1780,9 @@ export default function App() {
                         <span key={id}>{categoryOptions.find((c) => c.id === id)?.name}</span>
                       ))}
                     </div>
+                    <Button variant="outline" disabled={busy} onClick={() => setEditingDeal(d)} aria-label={`Edit bundle ${d.name}`}>
+                      <Pencil size={16} /> Edit bundle
+                    </Button>
                   </div>
                   <Button
                     variant="ghost"
@@ -1930,6 +1959,9 @@ export default function App() {
                     </TableCell>
                     <TableCell>
                       {e.start} — {e.end}
+                      <Button variant="ghost" disabled={busy} aria-label={`Edit dates for ${e.name}`} onClick={() => setEditingConvention(e)}>
+                        <Pencil size={16} /> Edit dates
+                      </Button>
                     </TableCell>
                     <TableCell>
                       <div className={`status-color status-${e.status}`}>
@@ -2447,6 +2479,14 @@ export default function App() {
             )}
         </TabsContent>
       </Tabs>
+      {editingConvention && (
+        <ConventionDateEditor event={editingConvention} busy={busy} onClose={() => setEditingConvention(null)}
+          onSave={(event) => persist({ ...w, events: w.events.map((current) => current.id === event.id ? event : current) })} />
+      )}
+      {editingDeal && (
+        <DealEditor deal={editingDeal} categories={categoryOptions} busy={busy} onClose={() => setEditingDeal(null)}
+          onSave={(deal) => persist({ ...w, deals: w.deals.map((current) => current.id === deal.id ? deal : current) })} />
+      )}
       <Dialog
         open={!!editingItem}
         onOpenChange={(open) => {

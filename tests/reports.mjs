@@ -26,6 +26,8 @@ assert.equal(nextAcceptedConvention([
 const w = { ...seed, categories: [], items: [] };
 const printColumns = salesGroups(seed, []).find(group => group.root === 'Prints').columns;
 assert.deepEqual(printColumns, ['Prints / Foil prints', 'Prints / Standard prints', 'Prints / Mini prints']);
+const repriced = { ...seed, categories: seed.categories.map((c, order) => ({ ...c, order, price: c.id === 'mini' ? 9000 : c.id === 'standard' ? null : c.price })) };
+assert.deepEqual(salesGroups(repriced, []).find(g => g.root === 'Prints').columns, ['Prints / Mini prints', 'Prints / Foil prints', 'Prints / Standard prints']);
 const group = salesGroups(w, [line('Zulu', 2500), line('Alpha', 2500), line('Beta', 3500), line('Zulu', 2500)])[0];
 assert.deepEqual(sortSalesNames(group, 'name', 1), ['Alpha', 'Beta', 'Zulu']);
 assert.deepEqual(sortSalesNames(group, 'weighted', -1), ['Zulu', 'Beta', 'Alpha']);
