@@ -4,6 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CategoryItemGrid } from '@/components/category-item-grid';
 import { ConventionDateEditor, DealEditor } from '@/components/catalog-editors';
 import { WeightedSalesPie } from '@/components/weighted-sales-pie';
+import { DailyTransactionChart } from '@/components/daily-transaction-chart';
 import {
   Dialog,
   DialogContent,
@@ -2149,6 +2150,15 @@ export default function App() {
                         <b>{money(allLines.reduce((a, l) => a + l.discount, 0))}</b>
                       </div>
                     </div>
+                    {reportDay && reportDay !== 'unassigned' && (
+                      <section className="panel">
+                        <div className="panel-title">
+                          <h2>Transactions over time</h2>
+                          <span>Cumulative sales · local time</span>
+                        </div>
+                        <DailyTransactionChart sales={sales} />
+                      </section>
+                    )}
                     <div className="dashboard-breakdowns">
                       {[
                         {
