@@ -2153,8 +2153,8 @@ export default function App() {
                     {reportDay && reportDay !== 'unassigned' && (
                       <section className="panel">
                         <div className="panel-title">
-                          <h2>Transactions over time</h2>
-                          <span>Cumulative sales · local time</span>
+                          <h2>Hourly transactions</h2>
+                          <span>Sales per hour · local time</span>
                         </div>
                         <DailyTransactionChart sales={sales} />
                       </section>
